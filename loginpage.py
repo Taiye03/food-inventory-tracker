@@ -9,7 +9,7 @@ import csv
 USERS_FILE = "users.csv"
 # Function to open the stock management system
 # Ensure the users file exists
-def init_users_csv():
+def init_users_csv(): 
     """
     Ensures the users.csv file exists. If not, creates it with default credentials.
     """
