@@ -198,7 +198,7 @@ export default function ProductsPage({ token, onLogout }) {
 
         <label>
           Quantity
-          <input name="quantity" type="number" min="0" step="1" value={form.quantity} onChange={handleChange} required />
+          <input name="quantity" type="number" min="0" step="0.5" value={form.quantity} onChange={handleChange} required />
         </label>
 
         <label>

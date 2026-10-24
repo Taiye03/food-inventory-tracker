@@ -1,7 +1,7 @@
 """
 Database tables. Each class here replaces one of the old CSV files.
 """
-from sqlalchemy import Column, Date, Float, Integer, String
+from sqlalchemy import Column, Date, Float, ForeignKey, Integer, String
 
 from app.database import Base
 
@@ -28,7 +28,9 @@ class Product(Base):
     batch_id = Column(String(30), unique=True, index=True, nullable=False)
     product_name = Column(String(100), nullable=False)
     price = Column(Float, nullable=False)
-    quantity = Column(Integer, nullable=False)
+    # Float so half cartons can be sold (the ledger has 37.5, 3.5).
+    # SQLite stores decimals fine in the existing column; no migration needed.
+    quantity = Column(Float, nullable=False)
     date_added = Column(Date, nullable=False)
     expiry_date = Column(Date, nullable=False)
 
@@ -47,3 +49,16 @@ class Order(Base):
     amount = Column(Float, nullable=False)
     amount_paid = Column(Float, nullable=False, default=0)
     notes = Column(String(255), nullable=True)
+
+
+class OrderAllocation(Base):
+    """Which batch each sale took its cartons from, and how many.
+    Lets us put the stock back exactly if an order is edited or deleted."""
+
+    __tablename__ = "order_allocations"
+
+    id = Column(Integer, primary_key=True)
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
+    batch_id = Column(String(30), nullable=False)
+    quantity = Column(Float, nullable=False)

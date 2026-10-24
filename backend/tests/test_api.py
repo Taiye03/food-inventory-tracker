@@ -135,6 +135,12 @@ def test_low_stock_adds_up_batches(client):
 
 
 # ---------- Orders ----------
+def stock(client, h, qty=100, name="Eggs (crate)", days=30):
+    r = client.post("/products", json=product(product_name=name, quantity=qty, days_until_expiry=days), headers=h)
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
 def order(**overrides):
     body = {"order_date": str(date.today()), "customer_name": "Mama Ade", "product_name": "Eggs (crate)",
             "cartons": 5, "amount": 22500, "amount_paid": 10000}
@@ -144,6 +150,7 @@ def order(**overrides):
 
 def test_orders_crud_and_status(client):
     h = login(client)
+    stock(client, h)
     r = client.post("/orders", json=order(), headers=h)
     assert r.status_code == 201
     o = r.json()
@@ -170,6 +177,7 @@ def test_order_validation(client):
 
 def test_staff_can_record_but_not_edit_orders(client):
     admin = login(client)
+    stock(client, admin)
     client.post("/users", json={"username": "staff", "fullname": "Staff", "role": "User",
                                 "email": "s@example.com", "password": "secret1"}, headers=admin)
     staff = login(client, "staff", "secret1")
@@ -181,6 +189,7 @@ def test_staff_can_record_but_not_edit_orders(client):
 
 def test_order_cartons_can_be_blank_or_fractional(client):
     h = login(client)
+    stock(client, h)
     r = client.post("/orders", json=order(cartons=None), headers=h)
     assert r.status_code == 201 and r.json()["cartons"] is None
     r = client.post("/orders", json=order(cartons=37.5), headers=h)
@@ -216,6 +225,7 @@ def test_import_ledger(tmp_path):
 # ---------- Reports ----------
 def test_reports(client):
     h = login(client)
+    stock(client, h)
     client.post("/orders", json=order(order_date="2026-01-05", customer_name="ACSK", cartons=None,
                                       amount=4000000, amount_paid=0), headers=h)
     client.post("/orders", json=order(order_date="2026-02-06", customer_name="4u", cartons=38,
@@ -242,3 +252,75 @@ def test_reports_admin_only(client):
                                 "email": "s@example.com", "password": "secret1"}, headers=admin)
     staff = login(client, "staff", "secret1")
     assert client.get("/reports/monthly", headers=staff).status_code == 403
+
+
+# ---------- Orders take stock ----------
+def test_sale_takes_soonest_expiring_batch_first(client):
+    h = login(client)
+    later = stock(client, h, qty=10, days=20)
+    sooner = stock(client, h, qty=4, days=5)
+    stock(client, h, qty=50, name="Eggs (tray)")
+    r = client.post("/orders", json=order(cartons=6), headers=h)
+    assert r.status_code == 201
+    taken = [(t["batch_id"], t["quantity"]) for t in r.json()["stock_taken"]]
+    assert taken == [(sooner["batch_id"], 4), (later["batch_id"], 2)]
+    qty = {p["batch_id"]: p["quantity"] for p in client.get("/products", headers=h).json()}
+    assert qty[sooner["batch_id"]] == 0 and qty[later["batch_id"]] == 8
+
+
+def test_sale_blocked_when_not_enough_stock(client):
+    h = login(client)
+    b = stock(client, h, qty=6)
+    r = client.post("/orders", json=order(cartons=10), headers=h)
+    assert r.status_code == 400 and "Only 6" in r.json()["detail"]
+    assert client.get("/orders", headers=h).json() == []                     # nothing saved
+    assert client.get(f"/products/{b['batch_id']}", headers=h).json()["quantity"] == 6  # stock untouched
+    r = client.post("/orders", json=order(product_name="Chicken"), headers=h)
+    assert r.status_code == 400 and "no product called" in r.json()["detail"]
+
+
+def test_expired_batches_are_never_sold(client):
+    h = login(client)
+    today = date.today()
+    client.post("/products", json=product(quantity=50, date_added=str(today - timedelta(days=30)),
+                                          expiry_date=str(today - timedelta(days=1))), headers=h)
+    r = client.post("/orders", json=order(cartons=1), headers=h)
+    assert r.status_code == 400 and "Only 0" in r.json()["detail"]
+
+
+def test_edit_and_delete_put_stock_back(client):
+    h = login(client)
+    b = stock(client, h, qty=20)
+    o = client.post("/orders", json=order(cartons=5), headers=h).json()
+    qty = lambda: client.get(f"/products/{b['batch_id']}", headers=h).json()["quantity"]
+    assert qty() == 15
+    client.put(f"/orders/{o['id']}", json=order(cartons=8), headers=h)
+    assert qty() == 12
+    client.put(f"/orders/{o['id']}", json=order(cartons=8, amount_paid=22500), headers=h)  # just marking paid
+    assert qty() == 12
+    client.delete(f"/orders/{o['id']}", headers=h)
+    assert qty() == 20
+
+
+def test_half_cartons_and_blank_cartons(client):
+    h = login(client)
+    b = stock(client, h, qty=10)
+    client.post("/orders", json=order(cartons=3.5), headers=h)
+    client.post("/orders", json=order(cartons=None), headers=h)  # no carton count: stock unchanged
+    assert client.get(f"/products/{b['batch_id']}", headers=h).json()["quantity"] == 6.5
+
+
+def test_editing_imported_order_never_takes_stock(client):
+    """Ledger orders were imported without taking stock; marking one paid mustn't change stock."""
+    from app.database import SessionLocal
+    from app.models import Order
+    h = login(client)
+    b = stock(client, h, qty=10)
+    db = SessionLocal()
+    imported = Order(order_date=date(2025, 10, 9), customer_name="Funtuna", product_name="Eggs (crate)",
+                     cartons=50, amount=2653000, amount_paid=0)
+    db.add(imported); db.commit(); oid = imported.id; db.close()
+    r = client.put(f"/orders/{oid}", json=order(order_date="2025-10-09", customer_name="Funtuna", cartons=50,
+                                                amount=2653000, amount_paid=2653000), headers=h)
+    assert r.status_code == 200 and r.json()["status"] == "Paid"
+    assert client.get(f"/products/{b['batch_id']}", headers=h).json()["quantity"] == 10

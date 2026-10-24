@@ -7,7 +7,8 @@
 //  (Paid / Part paid / Owing).
 //
 //  Anyone logged in can record a sale. Only admins can edit or delete.
-//  Orders don't change product stock yet; that can be linked later.
+//  Recording a sale takes the cartons out of stock (soonest-expiring
+//  batch first, never expired ones). Editing or deleting puts it back.
 // ============================================================
 
 import { useEffect, useState } from "react";
@@ -45,6 +46,8 @@ async function errorMessage(response) {
 
 export default function OrdersPage({ token, onLogout, isAdmin }) {
   const [orders, setOrders] = useState([]);
+  // What's in stock, e.g. { "Eggs (crate)": 26 } (not counting expired batches)
+  const [stock, setStock] = useState({});
   const [form, setForm] = useState(emptyForm);
   const [selectedId, setSelectedId] = useState(null);
   const [message, setMessage] = useState("");
@@ -56,9 +59,21 @@ export default function OrdersPage({ token, onLogout, isAdmin }) {
 
   async function loadOrders() {
     try {
-      const response = await fetch(`${API_URL}/orders`, { headers: authHeaders });
+      const [response, productsRes] = await Promise.all([
+        fetch(`${API_URL}/orders`, { headers: authHeaders }),
+        fetch(`${API_URL}/products`, { headers: authHeaders }),
+      ]);
       if (response.status === 401) return onLogout();
       setOrders(await response.json());
+
+      // Add up each product's batches that haven't expired
+      const totals = {};
+      for (const p of await productsRes.json()) {
+        if (p.expiry_date >= today()) {
+          totals[p.product_name] = (totals[p.product_name] ?? 0) + p.quantity;
+        }
+      }
+      setStock(totals);
     } catch {
       setMessage("Can't reach the server. Is the backend running?");
     }
@@ -110,7 +125,8 @@ export default function OrdersPage({ token, onLogout, isAdmin }) {
         body,
       });
       if (!response.ok) return setMessage(await errorMessage(response));
-      setMessage(successText);
+      const data = response.status === 204 ? null : await response.json();
+      setMessage(typeof successText === "function" ? successText(data) : successText);
       clearForm();
       loadOrders();
     } catch {
@@ -120,7 +136,11 @@ export default function OrdersPage({ token, onLogout, isAdmin }) {
 
   function saveOrder(e) {
     e.preventDefault();
-    send(`${API_URL}/orders`, "POST", formAsJson(), "Order recorded.");
+    send(`${API_URL}/orders`, "POST", formAsJson(), (data) => {
+      // e.g. "Order recorded. Took 4 from BATCH-20261024-002, 2 from BATCH-20261024-001."
+      const taken = data.stock_taken.map((t) => `${t.quantity} from ${t.batch_id}`).join(", ");
+      return taken ? `Order recorded. Took ${taken}.` : "Order recorded (stock not changed: no carton count).";
+    });
   }
 
   function updateOrder() {
@@ -169,7 +189,17 @@ export default function OrdersPage({ token, onLogout, isAdmin }) {
         </label>
         <label>
           Product
-          <input name="product_name" value={form.product_name} onChange={handleChange} required />
+          {/* A dropdown instead of free text, so the name always matches a product in stock */}
+          <select name="product_name" value={form.product_name} onChange={handleChange} required>
+            <option value="">Choose…</option>
+            {Object.entries(stock).map(([name, qty]) => (
+              <option key={name} value={name}>{name} ({qty} in stock)</option>
+            ))}
+            {/* keep an old order's product selectable even if it's not in stock any more */}
+            {form.product_name && !(form.product_name in stock) && (
+              <option value={form.product_name}>{form.product_name}</option>
+            )}
+          </select>
         </label>
         <label>
           Cartons

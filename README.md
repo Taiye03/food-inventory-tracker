@@ -56,10 +56,10 @@ Batch IDs (`BATCH-YYYYMMDD-XXX`), the 3-day expiry warning and CSV export behave
 
 - **Low-stock alerts:** warns when a product's total quantity across all batches is at or below 10. Change the level with `export LOW_STOCK_THRESHOLD=20` before starting the backend.
 - **Orders:** the client's sales ledger on the web: date, customer, product, cartons, amount and amount paid. The backend works out each order's balance and status (Paid / Part paid / Owing). The page shows totals and can filter by customer or unpaid orders. Any logged-in user can record a sale; only admins can edit or delete one.
+- **Sales take stock:** recording a sale takes the cartons out of stock, from the batch that expires soonest first, and never from expired batches. A sale bigger than the stock is blocked. Editing or deleting an order puts the stock back. Orders imported from the old ledger never touched stock.
+- **Reports (admins):** sales by month and by customer, with what each still owes.
 
 ## Still to do
 
-- Import the transcribed ledger data into Orders
-- Decide whether orders should reduce product stock automatically
-- Real reporting
+- Confirm unclear ledger rows and payment statuses (marked 📝 on the Orders page)
 - Demand-forecasting model

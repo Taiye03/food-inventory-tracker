@@ -40,7 +40,7 @@ class UserOut(BaseModel):
 class ProductBase(BaseModel):
     product_name: str = Field(min_length=1, max_length=100)
     price: float = Field(gt=0)
-    quantity: int = Field(ge=0)
+    quantity: float = Field(ge=0)
     date_added: date
     expiry_date: date
 
@@ -77,7 +77,7 @@ class ExpiryAlert(BaseModel):
 
 class LowStockAlert(BaseModel):
     product_name: str
-    quantity: int     # total across all batches of this product
+    quantity: float   # total across all batches of this product
     threshold: int
     message: str
 
@@ -109,10 +109,18 @@ class OrderUpdate(OrderBase):
     pass
 
 
+class StockTaken(BaseModel):
+    batch_id: str
+    quantity: float
+
+
 class OrderOut(OrderBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    # Which batches this sale took stock from (empty for imported ledger orders
+    # and for sales recorded without a carton count).
+    stock_taken: list[StockTaken] = []
 
     @computed_field
     @property
