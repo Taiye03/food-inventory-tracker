@@ -164,41 +164,53 @@ export default function ProductsPage({ token, onLogout }) {
   return (
     <div>
       <h1>Products</h1>
-      <button onClick={loadProducts}>Refresh</button>
-      <button onClick={exportCsv}>Export CSV</button>
+      <div className="toolbar">
+        <button onClick={loadProducts}>Refresh</button>
+        <button onClick={exportCsv}>Export CSV</button>
+      </div>
 
       {alerts.map((alert) => (
-        <p key={alert.batch_id}>⚠️ {alert.message}</p>
+        <p className="alert" key={alert.batch_id}>⚠️ {alert.message}</p>
       ))}
 
       {/* The form (was the six Entry widgets + buttons) */}
       <form onSubmit={saveProduct}>
         <h2>{selectedBatch ? `Editing ${selectedBatch}` : "New product"}</h2>
 
-        <label>Product Name</label>
-        <input name="product_name" value={form.product_name} onChange={handleChange} required />
+        <label>
+          Product Name
+          <input name="product_name" value={form.product_name} onChange={handleChange} required />
+        </label>
 
-        <label>Price</label>
-        <input name="price" type="number" min="0" step="0.01" value={form.price} onChange={handleChange} required />
+        <label>
+          Price
+          <input name="price" type="number" min="0" step="0.01" value={form.price} onChange={handleChange} required />
+        </label>
 
-        <label>Quantity</label>
-        <input name="quantity" type="number" min="0" step="1" value={form.quantity} onChange={handleChange} required />
+        <label>
+          Quantity
+          <input name="quantity" type="number" min="0" step="1" value={form.quantity} onChange={handleChange} required />
+        </label>
 
-        <label>Date Added</label>
-        <input name="date_added" type="date" value={form.date_added} onChange={handleChange} required />
+        <label>
+          Date Added
+          <input name="date_added" type="date" value={form.date_added} onChange={handleChange} required />
+        </label>
 
-        <label>Expiry Date</label>
-        <input name="expiry_date" type="date" value={form.expiry_date} onChange={handleChange} required />
+        <label>
+          Expiry Date
+          <input name="expiry_date" type="date" value={form.expiry_date} onChange={handleChange} required />
+        </label>
 
         <div>
           <button type="submit" disabled={selectedBatch !== null}>Save</button>
           <button type="button" onClick={updateProduct} disabled={!selectedBatch}>Update</button>
-          <button type="button" onClick={deleteProduct} disabled={!selectedBatch}>Delete</button>
+          <button type="button" className="danger" onClick={deleteProduct} disabled={!selectedBatch}>Delete</button>
           <button type="button" onClick={clearForm}>Clear</button>
         </div>
       </form>
 
-      {message && <p>{message}</p>}
+      {message && <p className="message">{message}</p>}
 
       {/* The table. Click a row to edit it. */}
       <table>
@@ -217,7 +229,8 @@ export default function ProductsPage({ token, onLogout }) {
             <tr
               key={p.batch_id}
               onClick={() => selectRow(p)}
-              style={{ cursor: "pointer", fontWeight: p.batch_id === selectedBatch ? "bold" : "normal" }}
+              className={p.batch_id === selectedBatch ? "selected" : ""}
+              style={{ cursor: "pointer" }}
             >
               <td>{p.batch_id}</td>
               <td>{p.product_name}</td>
@@ -230,7 +243,7 @@ export default function ProductsPage({ token, onLogout }) {
         </tbody>
       </table>
 
-      {products.length === 0 && <p>No products yet.</p>}
+      {products.length === 0 && <p className="empty">No products yet.</p>}
     </div>
   );
 }

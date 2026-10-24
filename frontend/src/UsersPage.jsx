@@ -85,29 +85,39 @@ export default function UsersPage({ token, onLogout }) {
       <form onSubmit={addUser}>
         <h2>Add User</h2>
 
-        <label>Username</label>
-        <input name="username" value={form.username} onChange={handleChange} required />
+        <label>
+          Username
+          <input name="username" value={form.username} onChange={handleChange} required />
+        </label>
 
-        <label>Full Name</label>
-        <input name="fullname" value={form.fullname} onChange={handleChange} required />
+        <label>
+          Full Name
+          <input name="fullname" value={form.fullname} onChange={handleChange} required />
+        </label>
 
-        <label>Role</label>
-        {/* <select> is the web version of ttk.Combobox */}
-        <select name="role" value={form.role} onChange={handleChange}>
-          <option value="User">User</option>
-          <option value="Admin">Admin</option>
-        </select>
+        <label>
+          Role
+          {/* <select> is the web version of ttk.Combobox */}
+          <select name="role" value={form.role} onChange={handleChange}>
+            <option value="User">User</option>
+            <option value="Admin">Admin</option>
+          </select>
+        </label>
 
-        <label>Email</label>
-        <input name="email" type="email" value={form.email} onChange={handleChange} required />
+        <label>
+          Email
+          <input name="email" type="email" value={form.email} onChange={handleChange} required />
+        </label>
 
-        <label>Password</label>
-        <input name="password" type="password" minLength={6} value={form.password} onChange={handleChange} required />
+        <label>
+          Password
+          <input name="password" type="password" minLength={6} value={form.password} onChange={handleChange} required />
+        </label>
 
         <button type="submit">Add User</button>
       </form>
 
-      {message && <p>{message}</p>}
+      {message && <p className="message">{message}</p>}
 
       {/* No password column — the API never sends passwords back. */}
       <table>

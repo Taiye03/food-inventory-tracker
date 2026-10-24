@@ -1,6 +1,190 @@
-body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background: #333333;
-  color: #ffffff;
+/* ============================================================
+   FoodHeroes styles
+   Light, calm palette: white, soft green, gentle yellow.
+   Change a colour once here and it updates everywhere.
+   ============================================================ */
+:root {
+  --bg: #f6f7f4;          /* page background: warm off-white */
+  --surface: #ffffff;     /* cards, tables, sidebar */
+  --border: #e2e6df;
+  --text: #1f2a23;
+  --muted: #66716a;
+
+  --green: #2f7a4d;       /* main buttons, active menu item */
+  --green-dark: #24613c;  /* button hover */
+  --green-soft: #eaf4ee;  /* selected row, success message */
+
+  --yellow-soft: #fdf7e1; /* expiry warnings */
+  --yellow-line: #ead58e;
+  --yellow-text: #6f5600;
+
+  --red: #b4473d;         /* delete button */
+  --radius: 8px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); }
+
+h1 { font-size: 1.6rem; margin: 0 0 1rem; }
+h2 { font-size: 1.05rem; margin: 0; color: var(--muted); font-weight: 600; }
+
+/* ---------- Buttons ---------- */
+button {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+button:hover { background: var(--bg); }
+button[type="submit"] { background: var(--green); border-color: var(--green); color: #fff; }
+button[type="submit"]:hover { background: var(--green-dark); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.danger { color: var(--red); border-color: #e9c9c5; }
+button.danger:hover:not(:disabled) { background: #fbefed; }
+
+/* ---------- Inputs ---------- */
+input, select {
+  font: inherit;
+  font-size: 0.95rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  width: 100%;
+}
+input:focus, select:focus {
+  outline: 2px solid var(--green-soft);
+  border-color: var(--green);
+}
+label { font-size: 0.85rem; color: var(--muted); font-weight: 500; }
+
+/* ---------- Login page (the only form directly inside #root) ---------- */
+#root > form {
+  max-width: 360px;
+  margin: 12vh auto 0;
+  padding: 2rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+#root > form h1 { color: var(--green); text-align: center; }
+#root > form h1::before { content: "🥚 FoodHeroes"; display: block; font-size: 0.85rem; color: var(--muted); font-weight: 500; }
+#root > form button { margin-top: 0.75rem; }
+
+/* ---------- App layout: sidebar menu + page ---------- */
+.app {
+  display: grid;
+  grid-template-columns: 210px 1fr;
+  min-height: 100vh;
+}
+nav {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 1.25rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+nav::before {
+  content: "🥚 FoodHeroes";
+  font-weight: 700;
+  color: var(--green);
+  padding: 0 0.75rem 1rem;
+}
+nav button {
+  text-align: left;
+  border: none;
+  background: none;
+}
+nav button.active { background: var(--green-soft); color: var(--green); font-weight: 600; }
+nav .logout { margin-top: auto; color: var(--muted); }
+nav .who { font-size: 0.8rem; color: var(--muted); padding: 0.5rem 0.75rem; }
+
+main { padding: 2rem; max-width: 1100px; width: 100%; }
+
+/* ---------- Toolbar (Refresh / Export) ---------- */
+.toolbar { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+
+/* ---------- Messages ---------- */
+.alert {
+  background: var(--yellow-soft);
+  border: 1px solid var(--yellow-line);
+  color: var(--yellow-text);
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius);
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+.message {
+  background: var(--green-soft);
+  color: var(--green-dark);
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+}
+
+/* ---------- Forms on Products / Users pages: a card with a grid ---------- */
+main form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin: 1rem 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 0.35rem 1rem;
+}
+main form h2, main form > div, main form > button { grid-column: 1 / -1; }
+main form > div { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+main form > button { justify-self: start; margin-top: 0.75rem; }
+/* each label wraps its input, so the label text sits on top of the box */
+main form label { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.5rem; }
+
+/* ---------- Tables ---------- */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  font-size: 0.9rem;
+}
+th {
+  text-align: left;
+  background: #f9faf8;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+th, td { padding: 0.65rem 0.9rem; border-bottom: 1px solid var(--border); }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: #fafbf9; }
+tbody tr.selected { background: var(--green-soft); }
+td:first-child { font-family: ui-monospace, Menlo, monospace; font-size: 0.82rem; }
+
+.empty { color: var(--muted); text-align: center; padding: 1.5rem; }
+
+/* ---------- Phones: menu goes on top ---------- */
+@media (max-width: 700px) {
+  .app { grid-template-columns: 1fr; }
+  nav { flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 1px solid var(--border); }
+  nav::before { width: 100%; padding-bottom: 0.5rem; }
+  nav .logout { margin-top: 0; margin-left: auto; }
+  nav .who { display: none; }
+  main { padding: 1rem; overflow-x: auto; }
+  table { min-width: 640px; } /* scroll sideways instead of squashing */
 }

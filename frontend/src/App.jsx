@@ -40,21 +40,23 @@ export default function App() {
   const isAdmin = me?.role === "Admin";
 
   return (
-    <div>
+    <div className="app">
       {/* Menu (was the sidebar buttons in every Tkinter page) */}
       <nav>
-        <button onClick={() => setPage("products")}>Products</button>
+        <button className={page === "products" ? "active" : ""} onClick={() => setPage("products")}>Products</button>
         {/* Only admins see the Users button */}
-        {isAdmin && <button onClick={() => setPage("users")}>Users</button>}
-        <button onClick={handleLogout}>Log out</button>
-        {me && <span> Logged in as {me.username} ({me.role})</span>}
+        {isAdmin && <button className={page === "users" ? "active" : ""} onClick={() => setPage("users")}>Users</button>}
+        {me && <span className="who">Logged in as {me.username} ({me.role})</span>}
+        <button className="logout" onClick={handleLogout}>Log out</button>
       </nav>
 
+      <main>
       {page === "users" && isAdmin ? (
         <UsersPage token={token} onLogout={handleLogout} />
       ) : (
         <ProductsPage token={token} onLogout={handleLogout} />
       )}
+      </main>
     </div>
   );
 }
