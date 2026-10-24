@@ -166,7 +166,6 @@ export default function ProductsPage({ token, onLogout }) {
       <h1>Products</h1>
       <button onClick={loadProducts}>Refresh</button>
       <button onClick={exportCsv}>Export CSV</button>
-      <button onClick={onLogout}>Log out</button>
 
       {alerts.map((alert) => (
         <p key={alert.batch_id}>⚠️ {alert.message}</p>
