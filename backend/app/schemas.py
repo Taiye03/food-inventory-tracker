@@ -89,7 +89,7 @@ class OrderBase(BaseModel):
     order_date: date
     customer_name: str = Field(min_length=1, max_length=100)
     product_name: str = Field(min_length=1, max_length=100)
-    cartons: int = Field(gt=0)
+    cartons: Optional[float] = Field(default=None, gt=0)  # blank or fractional in the ledger
     amount: float = Field(ge=0)          # total price of the order
     amount_paid: float = Field(ge=0, default=0)
     notes: Optional[str] = Field(default=None, max_length=255)

@@ -43,7 +43,7 @@ class Order(Base):
     order_date = Column(Date, nullable=False, index=True)
     customer_name = Column(String(100), nullable=False, index=True)
     product_name = Column(String(100), nullable=False)
-    cartons = Column(Integer, nullable=False)
+    cartons = Column(Float, nullable=True)   # blank in some ledger rows; can be 37.5
     amount = Column(Float, nullable=False)
     amount_paid = Column(Float, nullable=False, default=0)
     notes = Column(String(255), nullable=True)

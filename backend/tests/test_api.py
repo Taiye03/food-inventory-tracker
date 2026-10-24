@@ -177,3 +177,37 @@ def test_staff_can_record_but_not_edit_orders(client):
     assert r.status_code == 201
     assert client.put(f"/orders/{r.json()['id']}", json=order(), headers=staff).status_code == 403
     assert client.delete(f"/orders/{r.json()['id']}", headers=staff).status_code == 403
+
+
+def test_order_cartons_can_be_blank_or_fractional(client):
+    h = login(client)
+    r = client.post("/orders", json=order(cartons=None), headers=h)
+    assert r.status_code == 201 and r.json()["cartons"] is None
+    r = client.post("/orders", json=order(cartons=37.5), headers=h)
+    assert r.status_code == 201 and r.json()["cartons"] == 37.5
+
+
+def test_import_ledger(tmp_path):
+    from app.database import Base, SessionLocal, engine
+    from app.models import Order
+    from scripts.import_ledger import main as import_main
+
+    Base.metadata.drop_all(bind=engine)
+    ledger = tmp_path / "ledger.csv"
+    ledger.write_text(
+        "Date,Customer,Cartons (ctn),Amount (₦),Status,Notes\n"
+        "2026-02-06,4u,38,2280000.0,Paid,\n"
+        "2026-02-06,Pharm,2,120000.0,,\n"
+        "2026-02-12,?,,53000.0,,Name unclear\n",
+        encoding="utf-8",
+    )
+    import_main(str(ledger))
+    import_main(str(ledger))  # second run must not duplicate
+    db = SessionLocal()
+    rows = {o.customer_name: o for o in db.query(Order).all()}
+    db.close()
+    Base.metadata.drop_all(bind=engine)
+    assert len(rows) == 3
+    assert rows["4u"].amount_paid == 2280000
+    assert rows["Pharmcare"].amount_paid == 0 and "Pharm" in rows["Pharmcare"].notes
+    assert rows["Unknown"].cartons is None and rows["Unknown"].notes == "Name unclear"

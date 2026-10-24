@@ -215,6 +215,8 @@ td:first-child { font-family: ui-monospace, Menlo, monospace; font-size: 0.82rem
 .badge.part-paid { background: var(--yellow-soft); color: var(--yellow-text); }
 .badge.owing { background: #fbefed; color: var(--red); }
 
+.note-flag { cursor: help; font-size: 0.8rem; }
+
 /* ---------- Phones: menu goes on top ---------- */
 @media (max-width: 700px) {
   .app { grid-template-columns: 1fr; }

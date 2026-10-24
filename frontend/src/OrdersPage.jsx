@@ -84,7 +84,7 @@ export default function OrdersPage({ token, onLogout, isAdmin }) {
       order_date: o.order_date,
       customer_name: o.customer_name,
       product_name: o.product_name,
-      cartons: o.cartons,
+      cartons: o.cartons ?? "",
       amount: o.amount,
       amount_paid: o.amount_paid,
       notes: o.notes ?? "",
@@ -95,7 +95,7 @@ export default function OrdersPage({ token, onLogout, isAdmin }) {
   function formAsJson() {
     return JSON.stringify({
       ...form,
-      cartons: Number(form.cartons),
+      cartons: form.cartons === "" ? null : Number(form.cartons), // blank is allowed
       amount: Number(form.amount),
       amount_paid: Number(form.amount_paid || 0), // blank = nothing paid yet
       notes: form.notes || null,
@@ -140,7 +140,7 @@ export default function OrdersPage({ token, onLogout, isAdmin }) {
   );
 
   // Totals for whatever is currently shown
-  const totalCartons = shown.reduce((sum, o) => sum + o.cartons, 0);
+  const totalCartons = shown.reduce((sum, o) => sum + (o.cartons ?? 0), 0);
   const totalAmount = shown.reduce((sum, o) => sum + o.amount, 0);
   const totalOwed = shown.reduce((sum, o) => sum + o.balance, 0);
 
@@ -173,7 +173,7 @@ export default function OrdersPage({ token, onLogout, isAdmin }) {
         </label>
         <label>
           Cartons
-          <input name="cartons" type="number" min="1" step="1" value={form.cartons} onChange={handleChange} required />
+          <input name="cartons" type="number" min="0.5" step="0.5" value={form.cartons} onChange={handleChange} placeholder="optional" />
         </label>
         <label>
           Amount (₦)
@@ -196,7 +196,7 @@ export default function OrdersPage({ token, onLogout, isAdmin }) {
               <button type="button" className="danger" onClick={deleteOrder} disabled={!selectedId}>Delete</button>
             </>
           )}
-          <button type="button" onClick={clearForm}>Clear</button>
+          <button type="button" onClick={() => { clearForm(); setMessage(""); }}>Clear</button>
         </div>
       </form>
 
@@ -241,9 +241,13 @@ export default function OrdersPage({ token, onLogout, isAdmin }) {
             >
               <td>{o.id}</td>
               <td>{o.order_date}</td>
-              <td>{o.customer_name}</td>
+              <td>
+                {o.customer_name}
+                {/* 📝 = this order has a note (hover the row to read it) */}
+                {o.notes && <span className="note-flag" title={o.notes}> 📝</span>}
+              </td>
               <td>{o.product_name}</td>
-              <td>{o.cartons}</td>
+              <td>{o.cartons ?? "—"}</td>
               <td>{naira(o.amount)}</td>
               <td>{naira(o.amount_paid)}</td>
               <td>{naira(o.balance)}</td>
