@@ -1,10 +1,18 @@
+// ============================================================
+//  Login page
+// ============================================================
+//  Step 1 (done): the layout — title, two labels, two inputs, a button.
+//  Step 2 (done): useState, so the page remembers what's typed.
+//  Step 3 (done): clicking Login sends username + password to the backend.
+//  Step 4 (done): show a message when the login fails or succeeds.
+// ============================================================
 
 import { useState } from "react";
 
 // Where the backend lives. Same address you used for the /docs page.
 const API_URL = "http://localhost:8000";
 
-export default function LoginPage() {
+export default function LoginPage({ onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   // A third remembered value: the message shown under the form.
@@ -39,7 +47,7 @@ export default function LoginPage() {
       const data = await response.json();
       // Save the token in the browser so later pages can prove who's logged in.
       localStorage.setItem("token", data.access_token);
-      setMessage(`Logged in as ${username}.`);
+            onLogin(data.access_token); // tell App we're logged in
     } catch {
       // fetch itself failed: usually the backend isn't running.
       setMessage("Can't reach the server. Is the backend running?");
