@@ -52,10 +52,14 @@ Open http://localhost:5173.
 
 Batch IDs (`BATCH-YYYYMMDD-XXX`), the 3-day expiry warning and CSV export behave the same as before.
 
+## New features (not in the desktop app)
+
+- **Low-stock alerts:** warns when a product's total quantity across all batches is at or below 10. Change the level with `export LOW_STOCK_THRESHOLD=20` before starting the backend.
+- **Orders:** the client's sales ledger on the web: date, customer, product, cartons, amount and amount paid. The backend works out each order's balance and status (Paid / Part paid / Owing). The page shows totals and can filter by customer or unpaid orders. Any logged-in user can record a sale; only admins can edit or delete one.
+
 ## Still to do
 
-- React pages: login, products, users
-- Orders table + UI (from the transcribed ledger data)
-- Low-stock alerts
+- Import the transcribed ledger data into Orders
+- Decide whether orders should reduce product stock automatically
 - Real reporting
 - Demand-forecasting model

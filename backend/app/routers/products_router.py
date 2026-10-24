@@ -6,20 +6,25 @@ Anyone logged in can view products and alerts; only admins can change them.
 """
 import csv
 import io
+import os
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, require_admin
 from app.database import get_db
 from app.models import Product, User
-from app.schemas import ExpiryAlert, ProductCreate, ProductOut, ProductUpdate
+from app.schemas import ExpiryAlert, LowStockAlert, ProductCreate, ProductOut, ProductUpdate
 
 router = APIRouter(prefix="/products", tags=["products"])
 
 EXPIRY_WARNING_DAYS = 3
+# Warn when a product's total quantity (all batches) is at or below this.
+# Change it without touching code: export LOW_STOCK_THRESHOLD=20
+LOW_STOCK_THRESHOLD = int(os.getenv("LOW_STOCK_THRESHOLD", "10"))
 
 
 def generate_batch_id(db: Session) -> str:
@@ -62,6 +67,28 @@ def expiry_alerts(db: Session = Depends(get_db), _: User = Depends(get_current_u
                 message=f"Product '{p.product_name}' is nearing expiry in {days_left} days!",
             ))
     return alerts
+
+
+@router.get("/low-stock", response_model=list[LowStockAlert])
+def low_stock_alerts(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    """New: the old app had expiry alerts but no low-stock alerts (task #4).
+    Adds up every batch of the same product, so 3 batches of 4 crates = 12."""
+    totals = (
+        db.query(Product.product_name, func.sum(Product.quantity))
+        .group_by(Product.product_name)
+        .order_by(Product.product_name)
+        .all()
+    )
+    return [
+        LowStockAlert(
+            product_name=name,
+            quantity=total,
+            threshold=LOW_STOCK_THRESHOLD,
+            message=f"Low stock: only {total} of '{name}' left.",
+        )
+        for name, total in totals
+        if total <= LOW_STOCK_THRESHOLD
+    ]
 
 
 @router.get("/export")

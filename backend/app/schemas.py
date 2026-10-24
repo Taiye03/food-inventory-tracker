@@ -4,9 +4,9 @@ which replaces the manual checks in the Tkinter forms (required fields,
 email format, numeric price, date order).
 """
 from datetime import date
-from typing import Literal
+from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, model_validator
 
 
 # ---------- Auth ----------
@@ -73,3 +73,58 @@ class ExpiryAlert(BaseModel):
     days_left: int
     status: Literal["expired", "expiring_soon"]
     message: str
+
+
+class LowStockAlert(BaseModel):
+    product_name: str
+    quantity: int     # total across all batches of this product
+    threshold: int
+    message: str
+
+
+# ---------- Orders ----------
+class OrderBase(BaseModel):
+    """One line from the client's sales ledger."""
+
+    order_date: date
+    customer_name: str = Field(min_length=1, max_length=100)
+    product_name: str = Field(min_length=1, max_length=100)
+    cartons: int = Field(gt=0)
+    amount: float = Field(ge=0)          # total price of the order
+    amount_paid: float = Field(ge=0, default=0)
+    notes: Optional[str] = Field(default=None, max_length=255)
+
+    @model_validator(mode="after")
+    def paid_not_more_than_amount(self):
+        if self.amount_paid > self.amount:
+            raise ValueError("Amount paid cannot be more than the order amount.")
+        return self
+
+
+class OrderCreate(OrderBase):
+    pass
+
+
+class OrderUpdate(OrderBase):
+    pass
+
+
+class OrderOut(OrderBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+
+    @computed_field
+    @property
+    def balance(self) -> float:
+        """How much the customer still owes on this order."""
+        return round(self.amount - self.amount_paid, 2)
+
+    @computed_field
+    @property
+    def status(self) -> str:
+        if self.amount_paid >= self.amount:
+            return "Paid"
+        if self.amount_paid > 0:
+            return "Part paid"
+        return "Owing"

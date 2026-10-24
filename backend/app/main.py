@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.auth import hash_password
 from app.database import Base, SessionLocal, engine
 from app.models import User
-from app.routers import auth_router, products_router, users_router
+from app.routers import auth_router, orders_router, products_router, users_router
 
 
 def seed_admin():
@@ -59,6 +59,7 @@ app.add_middleware(
 app.include_router(auth_router.router)
 app.include_router(users_router.router)
 app.include_router(products_router.router)
+app.include_router(orders_router.router)
 
 
 @app.get("/")

@@ -31,3 +31,19 @@ class Product(Base):
     quantity = Column(Integer, nullable=False)
     date_added = Column(Date, nullable=False)
     expiry_date = Column(Date, nullable=False)
+
+
+class Order(Base):
+    """A sale, one line from the handwritten ledger. New table — created
+    automatically on startup, so existing products/users are untouched."""
+
+    __tablename__ = "orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_date = Column(Date, nullable=False, index=True)
+    customer_name = Column(String(100), nullable=False, index=True)
+    product_name = Column(String(100), nullable=False)
+    cartons = Column(Integer, nullable=False)
+    amount = Column(Float, nullable=False)
+    amount_paid = Column(Float, nullable=False, default=0)
+    notes = Column(String(255), nullable=True)

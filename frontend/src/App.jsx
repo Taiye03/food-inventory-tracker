@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import LoginPage from "./LoginPage.jsx";
 import ProductsPage from "./ProductsPage.jsx";
+import OrdersPage from "./OrdersPage.jsx";
 import UsersPage from "./UsersPage.jsx";
 
 const API_URL = "http://localhost:8000";
@@ -44,6 +45,7 @@ export default function App() {
       {/* Menu (was the sidebar buttons in every Tkinter page) */}
       <nav>
         <button className={page === "products" ? "active" : ""} onClick={() => setPage("products")}>Products</button>
+        <button className={page === "orders" ? "active" : ""} onClick={() => setPage("orders")}>Orders</button>
         {/* Only admins see the Users button */}
         {isAdmin && <button className={page === "users" ? "active" : ""} onClick={() => setPage("users")}>Users</button>}
         {me && <span className="who">Logged in as {me.username} ({me.role})</span>}
@@ -53,6 +55,8 @@ export default function App() {
       <main>
       {page === "users" && isAdmin ? (
         <UsersPage token={token} onLogout={handleLogout} />
+      ) : page === "orders" ? (
+        <OrdersPage token={token} onLogout={handleLogout} isAdmin={isAdmin} />
       ) : (
         <ProductsPage token={token} onLogout={handleLogout} />
       )}

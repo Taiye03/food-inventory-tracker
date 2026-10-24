@@ -122,3 +122,58 @@ def test_export_csv(client):
     r = client.get("/products/export", headers=h)
     assert r.status_code == 200
     assert r.text.splitlines()[0] == "Batch ID,Product Name,Price,Quantity,Date Added,Expiry Date"
+
+
+# ---------- Low stock ----------
+def test_low_stock_adds_up_batches(client):
+    h = login(client)
+    client.post("/products", json=product(product_name="Eggs (crate)", quantity=4), headers=h)
+    client.post("/products", json=product(product_name="Eggs (crate)", quantity=4), headers=h)
+    client.post("/products", json=product(product_name="Eggs (tray)", quantity=50), headers=h)
+    alerts = client.get("/products/low-stock", headers=h).json()
+    assert [(a["product_name"], a["quantity"]) for a in alerts] == [("Eggs (crate)", 8)]
+
+
+# ---------- Orders ----------
+def order(**overrides):
+    body = {"order_date": str(date.today()), "customer_name": "Mama Ade", "product_name": "Eggs (crate)",
+            "cartons": 5, "amount": 22500, "amount_paid": 10000}
+    body.update(overrides)
+    return body
+
+
+def test_orders_crud_and_status(client):
+    h = login(client)
+    r = client.post("/orders", json=order(), headers=h)
+    assert r.status_code == 201
+    o = r.json()
+    assert o["balance"] == 12500 and o["status"] == "Part paid"
+
+    r = client.put(f"/orders/{o['id']}", json=order(amount_paid=22500), headers=h)
+    assert r.json()["status"] == "Paid" and r.json()["balance"] == 0
+
+    client.post("/orders", json=order(customer_name="Chika Stores", amount_paid=0), headers=h)
+    unpaid = client.get("/orders?unpaid_only=true", headers=h).json()
+    assert [x["customer_name"] for x in unpaid] == ["Chika Stores"]
+    assert unpaid[0]["status"] == "Owing"
+    assert len(client.get("/orders?customer=ade", headers=h).json()) == 1
+
+    assert client.delete(f"/orders/{o['id']}", headers=h).status_code == 204
+    assert client.delete(f"/orders/{o['id']}", headers=h).status_code == 404
+
+
+def test_order_validation(client):
+    h = login(client)
+    assert client.post("/orders", json=order(amount_paid=99999), headers=h).status_code == 422
+    assert client.post("/orders", json=order(cartons=0), headers=h).status_code == 422
+
+
+def test_staff_can_record_but_not_edit_orders(client):
+    admin = login(client)
+    client.post("/users", json={"username": "staff", "fullname": "Staff", "role": "User",
+                                "email": "s@example.com", "password": "secret1"}, headers=admin)
+    staff = login(client, "staff", "secret1")
+    r = client.post("/orders", json=order(), headers=staff)
+    assert r.status_code == 201
+    assert client.put(f"/orders/{r.json()['id']}", json=order(), headers=staff).status_code == 403
+    assert client.delete(f"/orders/{r.json()['id']}", headers=staff).status_code == 403

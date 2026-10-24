@@ -4,6 +4,7 @@
 //  Replaces productspage.py:
 //    Treeview + refresh_table()  → the table + loadProducts()
 //    notify_expiry()             → the ⚠️ alerts
+//    (new) low-stock alerts      → the 📦 alerts
 //    Save / Update / Delete      → saveProduct / updateProduct / deleteProduct
 //    select_product (dbl-click)  → click a table row
 //    Export Excel                → exportCsv (downloads a real file)
@@ -43,6 +44,7 @@ async function errorMessage(response) {
 export default function ProductsPage({ token, onLogout }) {
   const [products, setProducts] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [lowStock, setLowStock] = useState([]);
   const [message, setMessage] = useState("");
 
   // One state object holds every form field (like the six Entry widgets).
@@ -55,9 +57,10 @@ export default function ProductsPage({ token, onLogout }) {
   // ---------- Load (refresh_table + notify_expiry) ----------
   async function loadProducts() {
     try {
-      const [productsRes, alertsRes] = await Promise.all([
+      const [productsRes, alertsRes, lowStockRes] = await Promise.all([
         fetch(`${API_URL}/products`, { headers: authHeaders }),
         fetch(`${API_URL}/products/alerts`, { headers: authHeaders }),
+        fetch(`${API_URL}/products/low-stock`, { headers: authHeaders }),
       ]);
       if (productsRes.status === 401) {
         onLogout(); // token expired: back to login
@@ -65,6 +68,7 @@ export default function ProductsPage({ token, onLogout }) {
       }
       setProducts(await productsRes.json());
       setAlerts(await alertsRes.json());
+      setLowStock(await lowStockRes.json());
     } catch {
       setMessage("Can't reach the server. Is the backend running?");
     }
@@ -171,6 +175,11 @@ export default function ProductsPage({ token, onLogout }) {
 
       {alerts.map((alert) => (
         <p className="alert" key={alert.batch_id}>⚠️ {alert.message}</p>
+      ))}
+
+      {/* New: low-stock alerts (the old app never had these) */}
+      {lowStock.map((item) => (
+        <p className="alert low" key={item.product_name}>📦 {item.message}</p>
       ))}
 
       {/* The form (was the six Entry widgets + buttons) */}

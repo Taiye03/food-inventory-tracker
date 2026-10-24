@@ -178,6 +178,43 @@ td:first-child { font-family: ui-monospace, Menlo, monospace; font-size: 0.82rem
 
 .empty { color: var(--muted); text-align: center; padding: 1.5rem; }
 
+/* ---------- Low-stock alert: soft blue-grey instead of yellow ---------- */
+.alert.low { background: #eef3f6; border-color: #c9d7e0; color: #2f4a5c; }
+
+/* ---------- Summary cards (Orders page) ---------- */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.stats > div {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.stats span { font-size: 0.8rem; color: var(--muted); }
+.stats strong { font-size: 1.25rem; }
+
+/* ---------- Search + checkbox row ---------- */
+.toolbar .search { max-width: 260px; }
+.toolbar .check {
+  display: flex; align-items: center; gap: 0.4rem;
+  font-size: 0.9rem; color: var(--text); white-space: nowrap;
+}
+.toolbar .check input { width: auto; }
+.toolbar { align-items: center; margin-top: 1rem; }
+
+/* ---------- Status badges ---------- */
+.badge { font-size: 0.78rem; font-weight: 600; padding: 0.15rem 0.55rem; border-radius: 999px; white-space: nowrap; }
+.badge.paid { background: var(--green-soft); color: var(--green-dark); }
+.badge.part-paid { background: var(--yellow-soft); color: var(--yellow-text); }
+.badge.owing { background: #fbefed; color: var(--red); }
+
 /* ---------- Phones: menu goes on top ---------- */
 @media (max-width: 700px) {
   .app { grid-template-columns: 1fr; }
