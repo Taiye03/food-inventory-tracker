@@ -128,3 +128,21 @@ class OrderOut(OrderBase):
         if self.amount_paid > 0:
             return "Part paid"
         return "Owing"
+
+
+# ---------- Reports ----------
+class MonthReport(BaseModel):
+    month: str        # "2026-02"
+    orders: int
+    cartons: float
+    sales: float
+    owed: float
+
+
+class CustomerReport(BaseModel):
+    customer_name: str
+    orders: int
+    cartons: float
+    sales: float
+    owed: float
+    last_order: date

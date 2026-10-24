@@ -217,6 +217,72 @@ td:first-child { font-family: ui-monospace, Menlo, monospace; font-size: 0.82rem
 
 .note-flag { cursor: help; font-size: 0.8rem; }
 
+/* ---------- Reports ---------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin: 1rem 0;
+}
+.card table { border: none; border-radius: 0; margin-top: 1rem; }
+.card td:first-child { font-family: inherit; font-size: inherit; } /* monospace is only for batch IDs */
+.legend { display: flex; gap: 1rem; font-size: 0.8rem; color: var(--muted); margin: 0.5rem 0; }
+.legend span { display: flex; align-items: center; gap: 0.35rem; }
+.swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.swatch.paid { background: #8fc4a3; }
+.swatch.owed { background: #e3a49c; }
+
+.chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  height: 240px;
+  padding-top: 0.5rem;
+}
+.bar-col {
+  flex: 1;
+  max-width: 90px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+}
+.bar {
+  width: 100%;
+  background: #8fc4a3;               /* collected */
+  border-radius: 6px 6px 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 2px;
+}
+.bar-owed { background: #e3a49c; }   /* still owed, sits on top */
+.bar-value { font-size: 0.75rem; font-weight: 600; }
+.bar-label { font-size: 0.75rem; color: var(--muted); padding-top: 0.3rem; white-space: nowrap; }
+.bar-track {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  border-bottom: 1px solid var(--border);
+}
+
+.share {
+  display: inline-block;
+  width: 70px;
+  height: 6px;
+  background: var(--bg);
+  border-radius: 3px;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+  overflow: hidden;
+}
+.share > div { height: 100%; background: var(--green); }
+td.owed { color: var(--red); font-weight: 500; }
+
 /* ---------- Phones: menu goes on top ---------- */
 @media (max-width: 700px) {
   .app { grid-template-columns: 1fr; }

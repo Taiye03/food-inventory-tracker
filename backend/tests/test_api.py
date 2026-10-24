@@ -211,3 +211,34 @@ def test_import_ledger(tmp_path):
     assert rows["4u"].amount_paid == 2280000
     assert rows["Pharmcare"].amount_paid == 0 and "Pharm" in rows["Pharmcare"].notes
     assert rows["Unknown"].cartons is None and rows["Unknown"].notes == "Name unclear"
+
+
+# ---------- Reports ----------
+def test_reports(client):
+    h = login(client)
+    client.post("/orders", json=order(order_date="2026-01-05", customer_name="ACSK", cartons=None,
+                                      amount=4000000, amount_paid=0), headers=h)
+    client.post("/orders", json=order(order_date="2026-02-06", customer_name="4u", cartons=38,
+                                      amount=2280000, amount_paid=2280000), headers=h)
+    client.post("/orders", json=order(order_date="2026-02-12", customer_name="ACSK", cartons=None,
+                                      amount=3000000, amount_paid=1000000), headers=h)
+
+    months = client.get("/reports/monthly", headers=h).json()
+    assert [(m["month"], m["orders"], m["sales"], m["owed"]) for m in months] == [
+        ("2026-01", 1, 4000000, 4000000),
+        ("2026-02", 2, 5280000, 2000000),
+    ]
+    assert months[1]["cartons"] == 38  # blank cartons count as 0, not an error
+
+    customers = client.get("/reports/customers", headers=h).json()
+    assert customers[0]["customer_name"] == "ACSK"
+    assert customers[0]["sales"] == 7000000 and customers[0]["owed"] == 6000000
+    assert customers[0]["last_order"] == "2026-02-12"
+
+
+def test_reports_admin_only(client):
+    admin = login(client)
+    client.post("/users", json={"username": "staff", "fullname": "Staff", "role": "User",
+                                "email": "s@example.com", "password": "secret1"}, headers=admin)
+    staff = login(client, "staff", "secret1")
+    assert client.get("/reports/monthly", headers=staff).status_code == 403

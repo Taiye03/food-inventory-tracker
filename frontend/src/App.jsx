@@ -6,6 +6,7 @@ import LoginPage from "./LoginPage.jsx";
 import ProductsPage from "./ProductsPage.jsx";
 import OrdersPage from "./OrdersPage.jsx";
 import UsersPage from "./UsersPage.jsx";
+import ReportsPage from "./ReportsPage.jsx";
 
 const API_URL = "http://localhost:8000";
 
@@ -47,6 +48,7 @@ export default function App() {
         <button className={page === "products" ? "active" : ""} onClick={() => setPage("products")}>Products</button>
         <button className={page === "orders" ? "active" : ""} onClick={() => setPage("orders")}>Orders</button>
         {/* Only admins see the Users button */}
+        {isAdmin && <button className={page === "reports" ? "active" : ""} onClick={() => setPage("reports")}>Reports</button>}
         {isAdmin && <button className={page === "users" ? "active" : ""} onClick={() => setPage("users")}>Users</button>}
         {me && <span className="who">Logged in as {me.username} ({me.role})</span>}
         <button className="logout" onClick={handleLogout}>Log out</button>
@@ -55,6 +57,8 @@ export default function App() {
       <main>
       {page === "users" && isAdmin ? (
         <UsersPage token={token} onLogout={handleLogout} />
+      ) : page === "reports" && isAdmin ? (
+        <ReportsPage token={token} onLogout={handleLogout} />
       ) : page === "orders" ? (
         <OrdersPage token={token} onLogout={handleLogout} isAdmin={isAdmin} />
       ) : (
