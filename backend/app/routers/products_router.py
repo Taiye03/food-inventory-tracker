@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user, require_admin
 from app.database import get_db
 from app.inventory import sellable_quantity
-from app.models import Product, User
+from app.models import OrderAllocation, Product, User
 from app.schemas import ExpiryAlert, LowStockAlert, ProductCreate, ProductOut, ProductUpdate
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -137,5 +137,22 @@ def update_product(batch_id: str, data: ProductUpdate, db: Session = Depends(get
 
 @router.delete("/{batch_id}", status_code=204)
 def delete_product(batch_id: str, db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    db.delete(get_or_404(db, batch_id))
+    """Delete a batch, unless a recorded sale took stock from it (P0-3).
+
+    A sold batch is blocked even at quantity 0: its sales still point at it,
+    and deleting it would lose cartons if the sale were later corrected.
+    A batch with no allocations left (never sold, or its sale was deleted or
+    moved to another product) can still be deleted for now. Keeping that
+    history too, and voiding sales instead of deleting them, comes with the
+    stock movement ledger and D5. Database-level enforcement (a RESTRICT
+    foreign key) comes with migrations in P0-5.
+    """
+    product = get_or_404(db, batch_id)
+    if db.query(OrderAllocation).filter_by(product_id=product.id).first() is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="This inventory batch cannot be deleted because it has been used in "
+                   "recorded sales. Review the associated sales before making corrections.",
+        )
+    db.delete(product)
     db.commit()

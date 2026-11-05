@@ -491,3 +491,51 @@ def test_batch_expiring_today_is_sellable(client):
     assert taken(r) == [(b["batch_id"], 6)]
     alerts = client.get("/products/low-stock", headers=h).json()
     assert [(a["product_name"], a["quantity"]) for a in alerts] == [("Eggs (crate)", 0)]
+
+
+# ---------- Batches used by sales can't be deleted (P0-3) ----------
+def test_cannot_delete_batch_used_by_a_sale(client):
+    h = login(client)
+    b = stock(client, h, qty=10)
+    o = client.post("/orders", json=order(cartons=4), headers=h).json()
+    r = client.delete(f"/products/{b['batch_id']}", headers=h)
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == (
+        "This inventory batch cannot be deleted because it has been used in "
+        "recorded sales. Review the associated sales before making corrections."
+    )
+    assert batch_qty(client, h, b["batch_id"]) == 6                      # batch still there
+    assert client.delete(f"/orders/{o['id']}", headers=h).status_code == 204
+    assert batch_qty(client, h, b["batch_id"]) == 10                     # cartons returned, none lost
+
+
+def test_cannot_delete_emptied_batch_used_by_a_sale(client):
+    """Quantity 0 doesn't make a batch safe to delete: its sales still point at it."""
+    h = login(client)
+    b = stock(client, h, qty=5)
+    client.post("/orders", json=order(cartons=5), headers=h)
+    assert batch_qty(client, h, b["batch_id"]) == 0
+    assert client.delete(f"/products/{b['batch_id']}", headers=h).status_code == 409
+    assert client.get(f"/products/{b['batch_id']}", headers=h).status_code == 200
+
+
+def test_cannot_delete_expired_batch_used_by_a_corrected_sale(client):
+    """A historical sale, corrected after its batch expired, still came from that batch."""
+    h = login(client)
+    b = stock(client, h, qty=20, days=10)
+    o = client.post("/orders", json=order(cartons=20), headers=h).json()
+    expire(b["batch_id"])
+    client.put(f"/orders/{o['id']}", json=order(cartons=15), headers=h)  # 5 returned
+    assert client.delete(f"/products/{b['batch_id']}", headers=h).status_code == 409
+    assert batch_qty(client, h, b["batch_id"]) == 5
+
+
+def test_can_delete_batch_no_sale_took_from(client):
+    """Unsold batches (e.g. entered by mistake) can still be deleted, even when
+    other batches of the same product have sales."""
+    h = login(client)
+    sold = stock(client, h, qty=10, days=5)
+    unsold = stock(client, h, qty=10, days=30)
+    client.post("/orders", json=order(cartons=3), headers=h)  # takes from `sold` only
+    assert client.delete(f"/products/{unsold['batch_id']}", headers=h).status_code == 204
+    assert client.delete(f"/products/{sold['batch_id']}", headers=h).status_code == 409
