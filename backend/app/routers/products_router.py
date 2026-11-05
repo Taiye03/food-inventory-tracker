@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, require_admin
 from app.database import get_db
+from app.inventory import sellable_quantity
 from app.models import Product, User
 from app.schemas import ExpiryAlert, LowStockAlert, ProductCreate, ProductOut, ProductUpdate
 
@@ -72,9 +73,11 @@ def expiry_alerts(db: Session = Depends(get_db), _: User = Depends(get_current_u
 @router.get("/low-stock", response_model=list[LowStockAlert])
 def low_stock_alerts(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """New: the old app had expiry alerts but no low-stock alerts (task #4).
-    Adds up every batch of the same product, so 3 batches of 4 crates = 12."""
+    Adds up the SELLABLE stock in every batch of the same product, so 3 batches
+    of 4 crates = 12. Expired batches count as 0, so a product with only expired
+    stock still shows up, at 0 (same rule as sales: see app/inventory.py)."""
     totals = (
-        db.query(Product.product_name, func.sum(Product.quantity))
+        db.query(Product.product_name, func.sum(sellable_quantity()))
         .group_by(Product.product_name)
         .order_by(Product.product_name)
         .all()

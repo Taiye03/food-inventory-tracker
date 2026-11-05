@@ -43,6 +43,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, require_admin
 from app.database import get_db
+from app.inventory import sellable
 from app.models import Order, OrderAllocation, Product, User
 from app.schemas import OrderCreate, OrderOut, OrderUpdate, StockTaken
 
@@ -71,7 +72,7 @@ def take_stock(db: Session, order: Order, quantity: Optional[float] = None) -> N
     batches = (
         db.query(Product)
         .filter(Product.product_name == order.product_name)
-        .filter(Product.expiry_date >= date.today())  # never sell expired stock
+        .filter(sellable())  # never sell expired stock
         .filter(Product.quantity > 0)
         .order_by(Product.expiry_date, Product.batch_id)
         .all()

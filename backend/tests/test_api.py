@@ -444,3 +444,50 @@ def test_changing_product_reallocates_from_new_product(client):
     assert taken(r) == [(tray["batch_id"], 4)]
     assert batch_qty(client, h, crate["batch_id"]) == 10
     assert batch_qty(client, h, tray["batch_id"]) == 6
+
+
+# ---------- Low stock counts only sellable stock (P0-2) ----------
+def test_low_stock_ignores_expired_batches(client):
+    """50 expired cartons must not hide that only 2 can actually be sold."""
+    h = login(client)
+    old = stock(client, h, qty=50, days=10)
+    stock(client, h, qty=2, days=20)
+    expire(old["batch_id"])
+    alerts = client.get("/products/low-stock", headers=h).json()
+    assert [(a["product_name"], a["quantity"]) for a in alerts] == [("Eggs (crate)", 2)]
+
+
+def test_low_stock_when_every_batch_has_expired(client):
+    """A product whose stock has all expired has nothing to sell: alert at 0."""
+    h = login(client)
+    old = stock(client, h, qty=30, days=10)
+    expire(old["batch_id"])
+    alerts = client.get("/products/low-stock", headers=h).json()
+    assert [(a["product_name"], a["quantity"]) for a in alerts] == [("Eggs (crate)", 0)]
+
+
+def test_low_stock_matches_what_a_sale_can_take(client):
+    """The alert and the sale check must agree on how much is sellable."""
+    h = login(client)
+    old = stock(client, h, qty=40, days=10)
+    stock(client, h, qty=8, days=20)
+    expire(old["batch_id"])
+    alerts = client.get("/products/low-stock", headers=h).json()
+    assert len(alerts) == 1, alerts
+    shown = alerts[0]["quantity"]
+    assert client.post("/orders", json=order(cartons=shown), headers=h).status_code == 201
+    r = client.post("/orders", json=order(cartons=1), headers=h)
+    assert r.status_code == 400 and "Only 0" in r.json()["detail"]
+
+
+def test_batch_expiring_today_is_sellable(client):
+    """Last day is still a selling day: alerts and sales both count today's batch."""
+    h = login(client)
+    b = stock(client, h, qty=6, days=0)  # expires today
+    alerts = client.get("/products/low-stock", headers=h).json()
+    assert [(a["product_name"], a["quantity"]) for a in alerts] == [("Eggs (crate)", 6)]
+    r = client.post("/orders", json=order(cartons=6), headers=h)
+    assert r.status_code == 201, r.text
+    assert taken(r) == [(b["batch_id"], 6)]
+    alerts = client.get("/products/low-stock", headers=h).json()
+    assert [(a["product_name"], a["quantity"]) for a in alerts] == [("Eggs (crate)", 0)]
