@@ -324,3 +324,123 @@ def test_editing_imported_order_never_takes_stock(client):
                                                 amount=2653000, amount_paid=2653000), headers=h)
     assert r.status_code == 200 and r.json()["status"] == "Paid"
     assert client.get(f"/products/{b['batch_id']}", headers=h).json()["quantity"] == 10
+
+
+# ---------- Editing orders keeps stock history correct (P0-1) ----------
+def batch_qty(client, h, batch_id):
+    return client.get(f"/products/{batch_id}", headers=h).json()["quantity"]
+
+
+def taken(r):
+    return [(t["batch_id"], t["quantity"]) for t in r.json()["stock_taken"]]
+
+
+def expire(batch_id):
+    """Simulate time passing: the batch's expiry date is now in the past."""
+    from app.database import SessionLocal
+    from app.models import Product
+    db = SessionLocal()
+    p = db.query(Product).filter_by(batch_id=batch_id).one()
+    p.date_added = date.today() - timedelta(days=30)
+    p.expiry_date = date.today() - timedelta(days=1)
+    db.commit()
+    db.close()
+
+
+def test_edit_sale_that_emptied_batch(client):
+    h = login(client)
+    b = stock(client, h, qty=5)
+    o = client.post("/orders", json=order(cartons=5), headers=h).json()
+    r = client.put(f"/orders/{o['id']}", json=order(cartons=5, amount_paid=22500), headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "Paid"
+    assert taken(r) == [(b["batch_id"], 5)]
+    assert batch_qty(client, h, b["batch_id"]) == 0
+
+
+def test_change_quantity_of_sale_that_emptied_batch(client):
+    h = login(client)
+    b = stock(client, h, qty=5)
+    o = client.post("/orders", json=order(cartons=5), headers=h).json()
+    r = client.put(f"/orders/{o['id']}", json=order(cartons=4), headers=h)
+    assert r.status_code == 200, r.text
+    assert taken(r) == [(b["batch_id"], 4)]
+    assert batch_qty(client, h, b["batch_id"]) == 1
+    r = client.put(f"/orders/{o['id']}", json=order(cartons=5), headers=h)  # and back up again
+    assert r.status_code == 200, r.text
+    assert taken(r) == [(b["batch_id"], 5)]  # one allocation row, not two
+    assert batch_qty(client, h, b["batch_id"]) == 0
+
+
+def test_update_payment_after_batch_expires(client):
+    h = login(client)
+    b = stock(client, h, qty=10)
+    o = client.post("/orders", json=order(cartons=3), headers=h).json()
+    expire(b["batch_id"])
+    r = client.put(f"/orders/{o['id']}", json=order(cartons=3, amount_paid=22500), headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "Paid"
+    assert taken(r) == [(b["batch_id"], 3)]
+    assert batch_qty(client, h, b["batch_id"]) == 7
+
+
+def test_edit_customer_date_price_notes_leaves_stock_alone(client):
+    h = login(client)
+    first = stock(client, h, qty=4, days=5)
+    later = stock(client, h, qty=10, days=20)
+    o = client.post("/orders", json=order(cartons=6), headers=h).json()
+    before = [(t["batch_id"], t["quantity"]) for t in o["stock_taken"]]
+    r = client.put(f"/orders/{o['id']}", json=order(
+        cartons=6, customer_name="Chika Stores", order_date=str(date.today() - timedelta(days=2)),
+        amount=27000, amount_paid=5000, notes="Price corrected"), headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["customer_name"] == "Chika Stores"
+    assert taken(r) == before
+    assert batch_qty(client, h, first["batch_id"]) == 0
+    assert batch_qty(client, h, later["batch_id"]) == 8
+
+
+def test_correct_historical_sale_after_batch_expires(client):
+    """Sold 20 from a batch that has since expired; it was really 15.
+    The 5 go back to the original batch and stay unsellable; newer stock is untouched."""
+    h = login(client)
+    old = stock(client, h, qty=20, days=10)
+    o = client.post("/orders", json=order(cartons=20), headers=h).json()
+    new = stock(client, h, qty=10, days=30)
+    expire(old["batch_id"])
+    r = client.put(f"/orders/{o['id']}", json=order(cartons=15), headers=h)
+    assert r.status_code == 200, r.text
+    assert taken(r) == [(old["batch_id"], 15)]
+    assert batch_qty(client, h, old["batch_id"]) == 5    # returned, but expired
+    assert batch_qty(client, h, new["batch_id"]) == 10   # newer stock untouched
+    r = client.post("/orders", json=order(cartons=11), headers=h)
+    assert r.status_code == 400 and "Only 10" in r.json()["detail"]  # the 5 aren't sellable
+
+
+def test_increasing_a_sale_takes_only_the_extra(client):
+    """Raising a historical sale keeps its original allocation; only the extra
+    comes from today's sellable stock."""
+    h = login(client)
+    old = stock(client, h, qty=8, days=10)
+    o = client.post("/orders", json=order(cartons=8), headers=h).json()
+    new = stock(client, h, qty=10, days=30)
+    expire(old["batch_id"])
+    r = client.put(f"/orders/{o['id']}", json=order(cartons=11), headers=h)
+    assert r.status_code == 200, r.text
+    assert taken(r) == [(old["batch_id"], 8), (new["batch_id"], 3)]
+    assert batch_qty(client, h, new["batch_id"]) == 7
+    r = client.put(f"/orders/{o['id']}", json=order(cartons=30), headers=h)
+    assert r.status_code == 400 and "19 more" in r.json()["detail"]
+    assert batch_qty(client, h, new["batch_id"]) == 7    # blocked edit changed nothing
+
+
+def test_changing_product_reallocates_from_new_product(client):
+    h = login(client)
+    crate = stock(client, h, qty=10)
+    tray = stock(client, h, qty=10, name="Eggs (tray)")
+    o = client.post("/orders", json=order(cartons=4), headers=h).json()
+    r = client.put(f"/orders/{o['id']}", json=order(cartons=4, product_name="Eggs (tray)"), headers=h)
+    assert r.status_code == 200, r.text
+    assert taken(r) == [(tray["batch_id"], 4)]
+    assert batch_qty(client, h, crate["batch_id"]) == 10
+    assert batch_qty(client, h, tray["batch_id"]) == 6

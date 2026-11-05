@@ -11,10 +11,29 @@ Stock (decided Oct 2026):
   - stock is taken from the batch that expires SOONEST first ("first expired,
     first out"), and expired batches are never sold
   - if there isn't enough stock, the sale is blocked with a clear message
-  - editing or deleting an order puts its stock back first
+  - editing an order changes stock only if its product or cartons change,
+    and keeps the batches it was originally sold from (see adjust_stock)
+  - deleting an order puts its stock back in the batches it came from
   - orders imported from the old ledger never touched stock, so deleting
     them doesn't add stock either
   - a sale with no carton count is recorded without changing stock
+
+Corrections (decided Nov 2026):
+  - reducing a sale's cartons returns the difference to the batch allocated
+    MOST RECENTLY first. Sales take the soonest-expiring batch first, so the
+    cartons from that batch are the ones most certainly sold. Returned cartons
+    stay with their original batch even if it has expired, so they never
+    become sellable again.
+  - increasing a sale keeps its original allocations and takes only the extra
+    from today's sellable stock.
+
+Known limitation (future design decision, revisit with the stock movement
+ledger): an order that never took stock (an imported ledger order, or a sale
+saved with blank cartons) never takes stock when edited either, even if a
+carton count is added later. This protects imported orders from removing
+today's stock, but means a blank-carton sale corrected to "5" leaves stock
+unchanged. Decide whether such edits should take stock, and how to tell
+imported orders apart, when designing the movement ledger.
 """
 from datetime import date
 from typing import Optional
@@ -37,10 +56,18 @@ def get_or_404(db: Session, order_id: int) -> Order:
     return order
 
 
-def take_stock(db: Session, order: Order) -> None:
-    """Take order.cartons out of the product's batches, soonest expiry first."""
-    if not order.cartons:
+def take_stock(db: Session, order: Order, quantity: Optional[float] = None) -> None:
+    """Take cartons out of the product's sellable batches, soonest expiry first.
+
+    By default takes all of order.cartons (a new sale). Pass `quantity` to take
+    only that many more (a sale corrected upwards).
+    """
+    needed = order.cartons if quantity is None else quantity
+    if not needed:
         return
+    # Send any earlier changes in this transaction (e.g. returned stock) to the
+    # database first, because the query below filters on quantity in SQL.
+    db.flush()
     batches = (
         db.query(Product)
         .filter(Product.product_name == order.product_name)
@@ -50,32 +77,71 @@ def take_stock(db: Session, order: Order) -> None:
         .all()
     )
     available = sum(b.quantity for b in batches)
-    if available < order.cartons:
+    if available < needed:
         if not db.query(Product).filter(Product.product_name == order.product_name).first():
             raise HTTPException(400, f"There's no product called '{order.product_name}' in stock.")
+        wanted = f"This sale needs {needed:g}." if quantity is None else f"This change needs {needed:g} more."
         raise HTTPException(
             400,
             f"Only {available:g} of '{order.product_name}' in stock "
-            f"(not counting expired batches). This sale needs {order.cartons:g}.",
+            f"(not counting expired batches). {wanted}",
         )
-    needed = order.cartons
     for batch in batches:
         if needed <= 0:
             break
         take = min(batch.quantity, needed)
         batch.quantity -= take
         needed -= take
-        db.add(OrderAllocation(order_id=order.id, product_id=batch.id,
-                               batch_id=batch.batch_id, quantity=take))
+        # One allocation row per batch: top up the existing one if there is one.
+        alloc = db.query(OrderAllocation).filter_by(order_id=order.id, product_id=batch.id).first()
+        if alloc:
+            alloc.quantity += take
+        else:
+            db.add(OrderAllocation(order_id=order.id, product_id=batch.id,
+                                   batch_id=batch.batch_id, quantity=take))
 
 
-def return_stock(db: Session, order: Order) -> None:
-    """Undo take_stock: put every carton back in the batch it came from."""
-    for alloc in db.query(OrderAllocation).filter_by(order_id=order.id).all():
+def return_stock(db: Session, order: Order, quantity: Optional[float] = None) -> None:
+    """Put cartons back in the batches they came from.
+
+    By default returns everything (order deleted, or product changed). Pass
+    `quantity` to return only that many (a sale corrected downwards), starting
+    with the batch taken from last. Returned cartons go to their original batch
+    even if it has expired since, so they don't become sellable.
+    """
+    remaining = quantity
+    allocs = db.query(OrderAllocation).filter_by(order_id=order.id).order_by(OrderAllocation.id.desc())
+    for alloc in allocs.all():
+        if remaining is not None and remaining <= 0:
+            break
+        give = alloc.quantity if remaining is None else min(alloc.quantity, remaining)
         batch = db.get(Product, alloc.product_id) if alloc.product_id else None
         if batch:  # the batch may have been deleted since; then there's nothing to return to
-            batch.quantity += alloc.quantity
-        db.delete(alloc)
+            batch.quantity += give
+        alloc.quantity -= give
+        if alloc.quantity <= 0:
+            db.delete(alloc)
+        if remaining is not None:
+            remaining -= give
+
+
+def adjust_stock(db: Session, order: Order, old_product: str, old_cartons: Optional[float]) -> None:
+    """After an edit, change stock by the difference only, so the sale keeps the
+    batches it was really sold from.
+
+      same product and cartons -> nothing changes
+      fewer cartons            -> the difference goes back to the original batches
+      more cartons             -> only the extra is taken, from sellable stock
+      different product        -> different goods: return all, then take the new product
+    """
+    old, new = old_cartons or 0, order.cartons or 0
+    if order.product_name != old_product:
+        return_stock(db, order)
+        take_stock(db, order)
+    elif new < old:
+        return_stock(db, order, old - new)
+    elif new > old:
+        take_stock(db, order, new - old)
 
 
 def to_out(db: Session, order: Order) -> OrderOut:
@@ -129,15 +195,15 @@ def update_order(order_id: int, data: OrderUpdate, db: Session = Depends(get_db)
                  _: User = Depends(require_admin)):
     order = get_or_404(db, order_id)
     had_stock = db.query(OrderAllocation).filter_by(order_id=order.id).first() is not None
-    return_stock(db, order)
+    old_product, old_cartons = order.product_name, order.cartons
     for field, value in data.model_dump().items():
         setattr(order, field, value)
-    # Only re-take stock for orders that took stock in the first place, so
+    # Only orders that took stock in the first place have stock to adjust, so
     # editing an old imported ledger order (e.g. to mark it paid) never
     # suddenly removes cartons from today's stock.
     if had_stock:
         try:
-            take_stock(db, order)
+            adjust_stock(db, order, old_product, old_cartons)
         except HTTPException:
             db.rollback()
             raise
