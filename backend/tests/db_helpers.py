@@ -1,7 +1,9 @@
 """Put the throwaway test database into a known state (used by test_api and test_startup)."""
+from contextlib import contextmanager
+
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import text
+from sqlalchemy import event, text
 
 import app.models  # noqa: F401  registers the tables
 from app.database import Base, engine
@@ -27,3 +29,23 @@ def reset_test_database(revision="head"):
     if revision is not None:
         with engine.begin() as conn:
             MigrationContext.configure(conn).stamp(ScriptDirectory.from_config(_config()), revision)
+
+
+@contextmanager
+def foreign_keys_enforced():
+    """Turn on SQLite foreign-key enforcement for every connection the app opens.
+
+    SQLite enforcement is per connection and off by default, and the app
+    doesn't enable it yet (that's P0-5 step 6). Tests that must behave like
+    PostgreSQL, or like the app after step 6, run inside this.
+    """
+    def _on(dbapi_connection, _record):
+        dbapi_connection.execute("PRAGMA foreign_keys = ON")
+
+    engine.dispose()                      # drop pooled connections opened without it
+    event.listen(engine, "connect", _on)
+    try:
+        yield
+    finally:
+        event.remove(engine, "connect", _on)
+        engine.dispose()                  # don't leak enforced connections to other tests

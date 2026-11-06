@@ -217,5 +217,12 @@ def update_order(order_id: int, data: OrderUpdate, db: Session = Depends(get_db)
 def delete_order(order_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     order = get_or_404(db, order_id)
     return_stock(db, order)
+    # Send the stock returns and allocation deletes to the database BEFORE
+    # deleting the order. The models declare no relationship between Order and
+    # OrderAllocation, so SQLAlchemy doesn't know the allocations depend on the
+    # order and would otherwise delete the order first, which a database that
+    # enforces foreign keys (PostgreSQL, or SQLite after P0-5 step 6) refuses.
+    # Everything is still one transaction: if any part fails, nothing is kept.
+    db.flush()
     db.delete(order)
     db.commit()
