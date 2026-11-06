@@ -22,6 +22,7 @@ Run from `backend/` with the virtual environment active. **Stop the app first.**
 | `python -m scripts.db_preflight [DB]` | Read-only health check: integrity, row counts, schema compared with the models, indexes, foreign keys, orphaned rows | Nothing |
 | `python -m scripts.backup_db backup [--source DB] [--dest-dir backups]` | Consistent copy using SQLite's backup API, integrity-checked, row counts and row contents compared with the source, plus a manifest (`<backup>.json`) | A **new** file in `backups/` |
 | `python -m scripts.backup_db verify BACKUP` | Re-checks a backup against its manifest: file checksum, integrity, row counts, row contents | Nothing |
+| `python -m scripts.reset_password --database DB --username NAME` | Sets a new password for an existing user (asks twice, hidden). Changes only that user's password hash. Refuses backups and databases that aren't at the latest migration | The live database's `users` table |
 | `python -m scripts.backup_db restore BACKUP --target PATH` | Restores a verified backup to a path that doesn't exist yet (a restore drill) | `PATH` |
 | `... restore BACKUP --target foodheroes.db --replace` | Restores over the live database. The current file is **renamed** to `foodheroes.db.before-restore-<time>`, never deleted | The database file |
 
@@ -94,6 +95,35 @@ python -m scripts.db_preflight /tmp/restore-drill.db
 ```
 
 The restored copy must pass the preflight check, and its row counts must match the manifest. Delete the drill copy afterwards.
+
+## Resetting a password
+
+For a forgotten password, or to replace the public default admin password. The app has no change-password screen yet.
+
+What changes: only that user's password hash. The account keeps its id, username, role and email. No other table refers to users, so orders, stock and payments can't be affected.
+
+1. Stop the app.
+2. Back up the live database:
+   `python -m scripts.backup_db backup --source /full/path/foodheroes.db --dest-dir /full/path/backups`
+3. `python -m scripts.reset_password --database /full/path/foodheroes.db --username admin`
+   - Type the new password twice. Nothing appears as you type, and it's never shown, logged or saved anywhere except as a bcrypt hash.
+   - At least 12 characters; a few unrelated words is easier to remember than a short complex string. Store it in a password manager, not in a file or note in this repository.
+4. `python -m scripts.db_preflight /full/path/foodheroes.db` must still report the latest revision and no issues.
+5. Start the app and log in with the new password.
+
+The script refuses (and changes nothing) for: a path that doesn't exist, a backup file, a database that isn't at the latest migration (which includes every pre-migration database and backup), an unknown username, passwords that don't match, are shorter than 12 characters, or equal the username, and a database with a journal file beside it (the app may be running).
+
+### Ending existing logins (rotating `SECRET_KEY`)
+
+Changing a password does **not** log out sessions that are already logged in: a login token stays valid until it expires (8 hours, `TOKEN_MINUTES`). If a token may have been seen by someone else (a screenshot, a shared screen), end every session by changing the key that signs tokens:
+
+```bash
+( umask 077; python3 -c "import secrets; print(secrets.token_urlsafe(48))" > ~/FoodHeroes-data/secret_key )
+export SECRET_KEY="$(cat ~/FoodHeroes-data/secret_key)"
+uvicorn app.main:app
+```
+
+Every token signed with the old key stops working at once, and everyone logs in again. Start the backend the same way every time: if `SECRET_KEY` isn't set, the app falls back to the public default key and anyone who has read this repository could create valid tokens. Keep `secret_key` out of the repository and out of backups you share, and never paste its contents anywhere.
 
 ## Recovering from a bad migration or damaged database
 
