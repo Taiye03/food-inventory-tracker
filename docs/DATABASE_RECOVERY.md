@@ -22,6 +22,7 @@ Run from `backend/` with the virtual environment active. **Stop the app first.**
 | `python -m scripts.db_preflight [DB]` | Read-only health check: integrity, row counts, schema compared with the models, indexes, foreign keys, orphaned rows | Nothing |
 | `python -m scripts.backup_db backup [--source DB] [--dest-dir backups]` | Consistent copy using SQLite's backup API, integrity-checked, row counts and row contents compared with the source, plus a manifest (`<backup>.json`) | A **new** file in `backups/` |
 | `python -m scripts.backup_db verify BACKUP` | Re-checks a backup against its manifest: file checksum, integrity, row counts, row contents | Nothing |
+| `python -m scripts.create_admin --database DB --username NAME --fullname "FULL NAME" --email EMAIL` | Creates the first administrator (asks for the password twice, hidden). Adds exactly one account and changes nothing else. Refuses if an administrator already exists, and refuses backups and databases that aren't at the latest migration | The live database's `users` table (one new row) |
 | `python -m scripts.reset_password --database DB --username NAME` | Sets a new password for an existing user (asks twice, hidden). Changes only that user's password hash. Refuses backups and databases that aren't at the latest migration | The live database's `users` table |
 | `python -m scripts.backup_db restore BACKUP --target PATH` | Restores a verified backup to a path that doesn't exist yet (a restore drill) | `PATH` |
 | `... restore BACKUP --target foodheroes.db --replace` | Restores over the live database. The current file is **renamed** to `foodheroes.db.before-restore-<time>`, never deleted | The database file |
@@ -40,6 +41,7 @@ The app never creates or changes tables. At startup it checks the database and r
 | "isn't under migration control yet" | A database created before migrations existed | [Bringing an existing database under migrations](#bringing-an-existing-database-under-migrations) |
 | "is at migration X; this code needs Y" | The code is newer than the database | [Upgrading after pulling new code](#upgrading-after-pulling-new-code) |
 | "at migration X, which this code doesn't know about" | The database was migrated by newer code | Update the code. Don't change the database |
+| "has no administrator account yet" | Migrated, but nobody can log in to manage it | [Creating the first administrator](#creating-the-first-administrator) |
 
 Migrations are never run automatically. `alembic` refuses to run unless `DATABASE_URL` is set, so it can't touch a database by accident. Always give the **full path** (`sqlite:////Users/you/…/foodheroes.db`, or `sqlite:///$PWD/foodheroes.db` from the folder it's in): a relative path depends on which folder you run the command from.
 
@@ -50,8 +52,28 @@ cd backend && source venv/bin/activate
 export DATABASE_URL=sqlite:///$PWD/foodheroes.db
 alembic upgrade head
 python -m scripts.db_preflight          # expect: Revision 0002 (or later), RESULT: no issues
-uvicorn app.main:app --reload           # creates the admin account on first start
+python -m scripts.create_admin --database "$PWD/foodheroes.db" \
+    --username owner --fullname "Business Owner" --email owner@example.com
+uvicorn app.main:app --reload
 ```
+
+### Creating the first administrator
+
+The app never creates an account by itself and has no default password. It refuses to start until the database has at least one administrator, and tells you to run:
+
+```bash
+python -m scripts.create_admin --database /full/path/foodheroes.db \
+    --username owner --fullname "Business Owner" --email owner@example.com
+```
+
+1. Stop the app. The database must already be at the latest migration (`alembic upgrade head`).
+2. Run the command above with your own details. All four options are required; there is no default database.
+3. Type the password twice. Nothing appears as you type, and it's never shown, logged or saved anywhere except as a bcrypt hash. Rules: at least 12 characters; at most 72 bytes (bcrypt ignores anything longer, so it's refused rather than silently cut; accented or non-Latin letters take 2–4 bytes each); no space at the start or end; not the same as the username. Store it in a password manager.
+4. Start the app and log in with the new account.
+
+What it changes: one new row in `users`, with role Admin. It never changes, replaces or deletes an existing account and touches no other table.
+
+It refuses, and changes nothing, for: a database that already has an administrator (use [Resetting a password](#resetting-a-password) to get back into an existing account), a username that already exists, an invalid username, name or email, a path that doesn't exist (it's never created), a file that isn't an SQLite database, a backup, a database that isn't at the latest migration, and a database with a journal file beside it (the app may be running). If another administrator appears while it's waiting for the password, it undoes its own change.
 
 ### Bringing an existing database under migrations
 
@@ -98,7 +120,7 @@ The restored copy must pass the preflight check, and its row counts must match t
 
 ## Resetting a password
 
-For a forgotten password, or to replace the public default admin password. The app has no change-password screen yet.
+For a forgotten password. The app has no change-password screen yet.
 
 What changes: only that user's password hash. The account keeps its id, username, role and email. No other table refers to users, so orders, stock and payments can't be affected.
 

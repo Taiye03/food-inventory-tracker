@@ -3,11 +3,18 @@ from contextlib import contextmanager
 
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import event, text
+from sqlalchemy import event, insert, text
 
-import app.models  # noqa: F401  registers the tables
+from app.auth import hash_password
 from app.database import Base, engine
 from app.db_check import _config
+from app.models import User
+
+# The administrator every test database starts with. Test-only: the app itself
+# has no default account or password any more (P0-7).
+TEST_ADMIN_USERNAME = "admin"
+TEST_ADMIN_PASSWORD = "test-only admin password 7"
+_TEST_ADMIN_HASH = hash_password(TEST_ADMIN_PASSWORD)   # hashed once per test run (bcrypt is slow)
 
 
 def clear_test_database():
@@ -17,8 +24,10 @@ def clear_test_database():
         conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
 
 
-def reset_test_database(revision="head"):
-    """An empty database recorded at `revision` (default: the latest migration).
+def reset_test_database(revision="head", admin=True):
+    """A database recorded at `revision` (default: the latest migration) with,
+    by default, one administrator (TEST_ADMIN_USERNAME / TEST_ADMIN_PASSWORD)
+    and no other data: the state the app's startup requires.
 
     Built with create_all() and stamped (decision M3, option A): fast, and safe
     because tests/test_migrations.py proves that create_all() and the
@@ -26,9 +35,13 @@ def reset_test_database(revision="head"):
     """
     clear_test_database()
     Base.metadata.create_all(bind=engine)
-    if revision is not None:
-        with engine.begin() as conn:
+    with engine.begin() as conn:
+        if revision is not None:
             MigrationContext.configure(conn).stamp(ScriptDirectory.from_config(_config()), revision)
+        if admin:
+            conn.execute(insert(User).values(username=TEST_ADMIN_USERNAME, fullname="Test Administrator",
+                                             role="Admin", email="admin@example.com",
+                                             password_hash=_TEST_ADMIN_HASH))
 
 
 @contextmanager

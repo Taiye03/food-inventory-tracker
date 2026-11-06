@@ -125,3 +125,28 @@ def check_database_revision(engine: Engine) -> str:
         f"(latest known: {head}). It was probably migrated by newer code: update the code, "
         f"don't change the database. {GUIDE}"
     ))
+
+
+def check_has_administrator(engine: Engine) -> None:
+    """Refuse to start until the database has at least one Admin account.
+
+    The app no longer creates an admin itself (there is no default password).
+    The first one is created deliberately with scripts/create_admin.py.
+    Only reads; call after check_database_revision().
+    """
+    from sqlalchemy import func, select
+
+    from app.models import User
+    with engine.connect() as conn:
+        admins = conn.execute(select(func.count()).select_from(User).where(User.role == "Admin")).scalar()
+    if admins:
+        return
+    sqlite_file = _sqlite_file(engine)
+    target = str(sqlite_file) if sqlite_file else "<path to the database>"
+    raise DatabaseNotReady("no_admin", (
+        "The database has no administrator account yet, so nobody could log in to manage it.\n"
+        "Create the first one (you'll be asked for the password, which isn't shown):\n"
+        f"    python -m scripts.create_admin --database {target} --username <name> "
+        "--fullname \"<full name>\" --email <email>\n"
+        f"{GUIDE}"
+    ))

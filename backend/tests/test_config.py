@@ -16,7 +16,7 @@ from app.config import (ConfigurationError, check_configuration, frontend_origin
                         signing_key, token_minutes)
 from app.database import engine
 from app.main import app
-from tests.db_helpers import clear_test_database, reset_test_database
+from tests.db_helpers import TEST_ADMIN_PASSWORD, clear_test_database, reset_test_database
 
 PUBLISHED_DEFAULT = "dev-only-secret-key-change-me-before-deploying"
 GOOD_KEY = secrets.token_urlsafe(48)
@@ -283,7 +283,7 @@ def test_token_signed_with_the_published_default_key_is_rejected(env):
     with TestClient(app) as c:
         forged = jwt.encode({"sub": "admin", "role": "Admin", "exp": 9999999999}, PUBLISHED_DEFAULT, algorithm="HS256")
         assert c.get("/users", headers={"Authorization": f"Bearer {forged}"}).status_code == 401
-        real = c.post("/auth/login", data={"username": "admin", "password": "changeme123"}).json()["access_token"]
+        real = c.post("/auth/login", data={"username": "admin", "password": TEST_ADMIN_PASSWORD}).json()["access_token"]
         assert c.get("/users", headers={"Authorization": f"Bearer {real}"}).status_code == 200
     clear_test_database()
 
@@ -291,7 +291,7 @@ def test_token_signed_with_the_published_default_key_is_rejected(env):
 def test_rotating_the_key_ends_existing_logins(env):
     reset_test_database()
     with TestClient(app) as c:
-        token = c.post("/auth/login", data={"username": "admin", "password": "changeme123"}).json()["access_token"]
+        token = c.post("/auth/login", data={"username": "admin", "password": TEST_ADMIN_PASSWORD}).json()["access_token"]
         assert c.get("/orders", headers={"Authorization": f"Bearer {token}"}).status_code == 200
         env.setenv("SECRET_KEY", secrets.token_urlsafe(48))          # key read on every request
         assert c.get("/orders", headers={"Authorization": f"Bearer {token}"}).status_code == 401
@@ -302,9 +302,9 @@ def test_authentication_stops_if_the_key_disappears_after_startup(env):
     """Even past the startup check, no token is signed or accepted without a safe key."""
     reset_test_database()
     with TestClient(app, raise_server_exceptions=False) as c:
-        token = c.post("/auth/login", data={"username": "admin", "password": "changeme123"}).json()["access_token"]
+        token = c.post("/auth/login", data={"username": "admin", "password": TEST_ADMIN_PASSWORD}).json()["access_token"]
         env.setenv("SECRET_KEY", PUBLISHED_DEFAULT)
-        assert c.post("/auth/login", data={"username": "admin", "password": "changeme123"}).status_code == 500
+        assert c.post("/auth/login", data={"username": "admin", "password": TEST_ADMIN_PASSWORD}).status_code == 500
         assert c.get("/orders", headers={"Authorization": f"Bearer {token}"}).status_code == 500
         env.delenv("SECRET_KEY")
         assert c.get("/orders", headers={"Authorization": f"Bearer {token}"}).status_code == 500

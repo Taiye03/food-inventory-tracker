@@ -18,7 +18,7 @@ from sqlalchemy.pool import NullPool
 from app.database import SessionLocal, engine, enforce_foreign_keys
 from app.main import app
 from app.models import Order, OrderAllocation, Product
-from tests.db_helpers import clear_test_database, reset_test_database
+from tests.db_helpers import TEST_ADMIN_PASSWORD, clear_test_database, reset_test_database
 
 TODAY = date.today()
 BACKEND = __import__("pathlib").Path(__file__).resolve().parents[1]
@@ -124,7 +124,7 @@ def test_full_sale_lifecycle_with_enforcement_on():
     engine.dispose()
     with TestClient(app) as c:
         assert rows("PRAGMA foreign_keys") == [(1,)]
-        h = {"Authorization": "Bearer " + c.post("/auth/login", data={"username": "admin", "password": "changeme123"}).json()["access_token"]}
+        h = {"Authorization": "Bearer " + c.post("/auth/login", data={"username": "admin", "password": TEST_ADMIN_PASSWORD}).json()["access_token"]}
         sooner = c.post("/products", json={"product_name": "Eggs (crate)", "price": 4500, "quantity": 4,
                                            "date_added": str(TODAY), "expiry_date": str(TODAY + timedelta(days=5))}, headers=h).json()["batch_id"]
         later = c.post("/products", json={"product_name": "Eggs (crate)", "price": 4500, "quantity": 10,

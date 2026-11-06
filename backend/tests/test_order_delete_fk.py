@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.database import engine
 from app.main import app
-from tests.db_helpers import clear_test_database, foreign_keys_enforced, reset_test_database
+from tests.db_helpers import TEST_ADMIN_PASSWORD, clear_test_database, foreign_keys_enforced, reset_test_database
 
 TODAY = date.today()
 
@@ -30,7 +30,7 @@ def client():
 
 @pytest.fixture()
 def h(client):
-    r = client.post("/auth/login", data={"username": "admin", "password": "changeme123"})
+    r = client.post("/auth/login", data={"username": "admin", "password": TEST_ADMIN_PASSWORD})
     return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
 

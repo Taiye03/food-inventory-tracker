@@ -20,7 +20,7 @@ from app.database import Base, engine
 from app.db_check import DatabaseNotReady, check_database_revision, latest_revision
 from app.main import app
 from scripts.db_common import file_sha256
-from tests.db_helpers import clear_test_database, reset_test_database
+from tests.db_helpers import TEST_ADMIN_PASSWORD, clear_test_database, reset_test_database
 
 BACKEND = Path(__file__).resolve().parents[1]
 HEAD = latest_revision()
@@ -151,17 +151,41 @@ def test_messages_use_the_full_path(tmp_path, monkeypatch):
 
 
 # ---------- the app's startup ----------
-def admin_count():
+def users():
     with engine.connect() as conn:
-        return conn.execute(text("SELECT COUNT(*) FROM users")).scalar()
+        return conn.execute(text("SELECT id, username, role, password_hash FROM users ORDER BY id")).fetchall()
 
 
-def test_app_starts_and_seeds_admin_at_latest_revision():
+def test_app_starts_at_latest_revision_with_an_administrator():
     reset_test_database()
+    before = users()
     with TestClient(app) as c:
         assert c.get("/").json() == {"status": "ok"}
-        r = c.post("/auth/login", data={"username": "admin", "password": "changeme123"})
+        r = c.post("/auth/login", data={"username": "admin", "password": TEST_ADMIN_PASSWORD})
         assert r.status_code == 200
+    assert users() == before                              # startup never adds or changes accounts
+    clear_test_database()
+
+
+def test_app_refuses_a_database_with_no_administrator_and_creates_none():
+    reset_test_database(admin=False)
+    with pytest.raises(DatabaseNotReady, match="no administrator account") as e:
+        with TestClient(app):
+            pass
+    assert "scripts.create_admin" in str(e.value)
+    assert users() == []                                  # no automatic admin, no default password
+    clear_test_database()
+
+
+def test_app_refuses_a_database_with_only_non_admin_users():
+    reset_test_database(admin=False)
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO users (username, fullname, role, email, password_hash) "
+                          "VALUES ('ada', 'Ada', 'User', 'a@example.com', 'x')"))
+    with pytest.raises(DatabaseNotReady, match="no administrator account"):
+        with TestClient(app):
+            pass
+    assert [(u[1], u[2]) for u in users()] == [("ada", "User")]   # nothing promoted or added
     clear_test_database()
 
 
@@ -176,23 +200,23 @@ def test_app_refuses_missing_database_without_creating_it():
     assert not path.exists()                              # nothing created
 
 
-def test_app_refuses_unversioned_database_and_seeds_nothing():
-    reset_test_database(revision=None)                    # tables, but no alembic_version
+def test_app_refuses_unversioned_database_and_changes_no_accounts():
+    reset_test_database(revision=None, admin=False)       # tables, but no alembic_version
     with pytest.raises(DatabaseNotReady, match="isn't under migration control"):
         with TestClient(app):
             pass
-    assert admin_count() == 0                             # seed_admin never ran
+    assert users() == []                                  # no account was created
     with engine.connect() as conn:
         assert "alembic_version" not in {r[0] for r in conn.execute(text("SELECT name FROM sqlite_master"))}
     clear_test_database()
 
 
 def test_app_refuses_outdated_database_and_does_not_migrate_it():
-    reset_test_database(revision="0001")
+    reset_test_database(revision="0001", admin=False)
     with pytest.raises(DatabaseNotReady, match="this code needs 0002"):
         with TestClient(app):
             pass
-    assert admin_count() == 0
+    assert users() == []
     with engine.connect() as conn:
         assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0001"
     clear_test_database()

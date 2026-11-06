@@ -12,7 +12,7 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.main import app  # noqa: E402
-from tests.db_helpers import clear_test_database, reset_test_database  # noqa: E402
+from tests.db_helpers import TEST_ADMIN_PASSWORD, clear_test_database, reset_test_database  # noqa: E402
 
 
 @pytest.fixture()
@@ -23,7 +23,7 @@ def client():
     clear_test_database()
 
 
-def login(client, username="admin", password="changeme123"):
+def login(client, username="admin", password=TEST_ADMIN_PASSWORD):
     r = client.post("/auth/login", data={"username": username, "password": password})
     assert r.status_code == 200, r.text
     return {"Authorization": f"Bearer {r.json()['access_token']}"}

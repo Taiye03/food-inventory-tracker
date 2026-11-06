@@ -25,13 +25,12 @@ The app never creates or changes database tables itself; migrations do. It refus
 export DATABASE_URL=sqlite:///$PWD/foodheroes.db
 export SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"   # or your saved key
 alembic upgrade head              # creates the tables
+python -m scripts.create_admin --database "$PWD/foodheroes.db" \
+    --username owner --fullname "Business Owner" --email owner@example.com
 uvicorn app.main:app --reload
 ```
 
-On the first start it creates one account:
-
-- username: `admin`
-- password: `changeme123`. This default is public: **change it straight away** with `scripts/reset_password.py` (see "Resetting a password" in [docs/DATABASE_RECOVERY.md](docs/DATABASE_RECOVERY.md)).
+There is no built-in account and no default password. `create_admin` asks for the new administrator's password twice (hidden as you type): at least 12 characters and at most 72 bytes. The backend refuses to start until the database has an administrator. See "Creating the first administrator" in [docs/DATABASE_RECOVERY.md](docs/DATABASE_RECOVERY.md).
 
 The backend won't start without its own `SECRET_KEY` (at least 32 random characters), which signs every login. There is no built-in default. Keep the same key between restarts, or everyone is logged out; see "Ending existing logins" in the same document.
 
@@ -61,7 +60,7 @@ Open http://localhost:5173.
 |---|---|
 | Passwords stored as plain text in users.csv | bcrypt hashes; the API never returns passwords |
 | Roles defined but not enforced | "User" accounts can view; only "Admin" can change data (403 otherwise) |
-| `init_users_csv()` broken on fresh install | A first admin account is created automatically |
+| `init_users_csv()` broken on fresh install | The first admin is created with `scripts/create_admin.py`; there is no default password |
 | Update/delete accepted any Batch ID, skipped date checks | 404 for unknown Batch IDs; expiry date is checked on every save |
 | CSV files | SQLAlchemy database (SQLite locally, MySQL by setting `DATABASE_URL`) |
 | One computer at a time | Anyone with a browser and a login |

@@ -24,7 +24,7 @@ from scripts.reset_password import main
 from tests.db_helpers import clear_test_database, reset_test_database
 
 BACKEND = Path(__file__).resolve().parents[1]
-OLD = "changeme123"
+OLD = "old password for tests"
 NEW = "correct horse battery staple"
 TABLES = ("users", "products", "orders", "order_allocations")
 
