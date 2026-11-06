@@ -3,9 +3,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from app.auth import create_token, get_current_user, verify_password
+from app.auth import create_token, verify_password
 from app.database import get_db
 from app.models import User
+from app.permissions import Permission, require_permission
 from app.schemas import Token, UserOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -21,6 +22,6 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
 
 
 @router.get("/me", response_model=UserOut)
-def me(user: User = Depends(get_current_user)):
+def me(user: User = Depends(require_permission(Permission.VIEW_OWN_ACCOUNT))):
     """Who am I? The frontend uses this to know whether to show admin buttons."""
     return user

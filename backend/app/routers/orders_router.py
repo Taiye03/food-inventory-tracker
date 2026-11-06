@@ -41,10 +41,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user, require_admin
 from app.database import get_db
 from app.inventory import sellable
 from app.models import Order, OrderAllocation, Product, User
+from app.permissions import Permission, require_permission
 from app.schemas import OrderCreate, OrderOut, OrderUpdate, StockTaken
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -161,7 +161,7 @@ def list_orders(
     end: Optional[date] = None,
     unpaid_only: bool = False,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_permission(Permission.VIEW_ORDERS)),
 ):
     """Newest first. Optional filters: ?customer=Ade&start=2026-10-01&unpaid_only=true"""
     q = db.query(Order)
@@ -177,7 +177,8 @@ def list_orders(
 
 
 @router.post("", response_model=OrderOut, status_code=201)
-def create_order(data: OrderCreate, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def create_order(data: OrderCreate, db: Session = Depends(get_db),
+                 _: User = Depends(require_permission(Permission.RECORD_SALE))):
     order = Order(**data.model_dump())
     db.add(order)
     db.flush()  # gives the order an id without committing yet
@@ -193,7 +194,7 @@ def create_order(data: OrderCreate, db: Session = Depends(get_db), _: User = Dep
 
 @router.put("/{order_id}", response_model=OrderOut)
 def update_order(order_id: int, data: OrderUpdate, db: Session = Depends(get_db),
-                 _: User = Depends(require_admin)):
+                 _: User = Depends(require_permission(Permission.MANAGE_ORDERS))):
     order = get_or_404(db, order_id)
     had_stock = db.query(OrderAllocation).filter_by(order_id=order.id).first() is not None
     old_product, old_cartons = order.product_name, order.cartons
@@ -214,7 +215,7 @@ def update_order(order_id: int, data: OrderUpdate, db: Session = Depends(get_db)
 
 
 @router.delete("/{order_id}", status_code=204)
-def delete_order(order_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def delete_order(order_id: int, db: Session = Depends(get_db), _: User = Depends(require_permission(Permission.MANAGE_ORDERS))):
     order = get_or_404(db, order_id)
     return_stock(db, order)
     # Send the stock returns and allocation deletes to the database BEFORE

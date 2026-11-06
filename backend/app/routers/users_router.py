@@ -2,21 +2,22 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.auth import hash_password, require_admin
+from app.auth import hash_password
 from app.database import get_db
 from app.models import User
+from app.permissions import Permission, require_permission
 from app.schemas import UserCreate, UserOut
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 
 @router.get("", response_model=list[UserOut])
-def list_users(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def list_users(db: Session = Depends(get_db), _: User = Depends(require_permission(Permission.MANAGE_USERS))):
     return db.query(User).order_by(User.username).all()
 
 
 @router.post("", response_model=UserOut, status_code=201)
-def add_user(data: UserCreate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def add_user(data: UserCreate, db: Session = Depends(get_db), _: User = Depends(require_permission(Permission.MANAGE_USERS))):
     if db.query(User).filter(User.username == data.username).first():
         raise HTTPException(status_code=400, detail=f"Username '{data.username}' is already taken.")
     user = User(

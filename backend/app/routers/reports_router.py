@@ -8,16 +8,16 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth import require_admin
 from app.database import get_db
 from app.models import Order, User
+from app.permissions import Permission, require_permission
 from app.schemas import CustomerReport, MonthReport
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 
 @router.get("/monthly", response_model=list[MonthReport])
-def sales_by_month(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def sales_by_month(db: Session = Depends(get_db), _: User = Depends(require_permission(Permission.VIEW_REPORTS))):
     """One row per month: number of orders, cartons, sales and amount still owed."""
     # strftime works on SQLite; on MySQL this would be DATE_FORMAT(order_date, '%Y-%m')
     month = func.strftime("%Y-%m", Order.order_date).label("month")
@@ -40,7 +40,7 @@ def sales_by_month(db: Session = Depends(get_db), _: User = Depends(require_admi
 
 
 @router.get("/customers", response_model=list[CustomerReport])
-def sales_by_customer(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def sales_by_customer(db: Session = Depends(get_db), _: User = Depends(require_permission(Permission.VIEW_REPORTS))):
     """One row per customer, biggest buyer first."""
     rows = (
         db.query(

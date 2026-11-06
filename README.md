@@ -60,7 +60,7 @@ Open http://localhost:5173.
 | Old desktop app | Website version |
 |---|---|
 | Passwords stored as plain text in users.csv | bcrypt hashes; the API never returns passwords |
-| Roles defined but not enforced | "User" accounts can view; only "Admin" can change data (403 otherwise) |
+| Roles defined but not enforced | Every endpoint declares a permission, and one table (`backend/app/permissions.py`) says which role has it. "User" (employee) accounts can view stock and sales and record a sale; only "Admin" (owner) can change stock, edit or delete sales, see reports and manage users (403 otherwise). `tests/test_permissions.py` checks every endpoint for every role |
 | `init_users_csv()` broken on fresh install | The first admin is created with `scripts/create_admin.py`; there is no default password |
 | Update/delete accepted any Batch ID, skipped date checks | 404 for unknown Batch IDs; expiry date is checked on every save |
 | CSV files | SQLAlchemy database (SQLite locally, MySQL by setting `DATABASE_URL`) |

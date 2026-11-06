@@ -14,10 +14,10 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user, require_admin
 from app.database import get_db
 from app.inventory import sellable_quantity
 from app.models import OrderAllocation, Product, User
+from app.permissions import Permission, require_permission
 from app.schemas import ExpiryAlert, LowStockAlert, ProductCreate, ProductOut, ProductUpdate
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -44,13 +44,13 @@ def get_or_404(db: Session, batch_id: str) -> Product:
 
 
 @router.get("", response_model=list[ProductOut])
-def list_products(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def list_products(db: Session = Depends(get_db), _: User = Depends(require_permission(Permission.VIEW_STOCK))):
     return db.query(Product).order_by(Product.batch_id).all()
 
 
 # Declared before "/{batch_id}" so "alerts" and "export" aren't read as batch IDs.
 @router.get("/alerts", response_model=list[ExpiryAlert])
-def expiry_alerts(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def expiry_alerts(db: Session = Depends(get_db), _: User = Depends(require_permission(Permission.VIEW_STOCK))):
     """Replaces notify_expiry()."""
     alerts = []
     for p in db.query(Product).order_by(Product.expiry_date).all():
@@ -71,7 +71,7 @@ def expiry_alerts(db: Session = Depends(get_db), _: User = Depends(get_current_u
 
 
 @router.get("/low-stock", response_model=list[LowStockAlert])
-def low_stock_alerts(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def low_stock_alerts(db: Session = Depends(get_db), _: User = Depends(require_permission(Permission.VIEW_STOCK))):
     """New: the old app had expiry alerts but no low-stock alerts (task #4).
     Adds up the SELLABLE stock in every batch of the same product, so 3 batches
     of 4 crates = 12. Expired batches count as 0, so a product with only expired
@@ -95,7 +95,7 @@ def low_stock_alerts(db: Session = Depends(get_db), _: User = Depends(get_curren
 
 
 @router.get("/export")
-def export_csv(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def export_csv(db: Session = Depends(get_db), _: User = Depends(require_permission(Permission.EXPORT_STOCK))):
     """Replaces export_to_excel(): downloads the products as a CSV file."""
     buffer = io.StringIO()
     writer = csv.writer(buffer)
@@ -111,12 +111,13 @@ def export_csv(db: Session = Depends(get_db), _: User = Depends(get_current_user
 
 
 @router.get("/{batch_id}", response_model=ProductOut)
-def get_product(batch_id: str, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def get_product(batch_id: str, db: Session = Depends(get_db),
+                _: User = Depends(require_permission(Permission.VIEW_STOCK))):
     return get_or_404(db, batch_id)
 
 
 @router.post("", response_model=ProductOut, status_code=201)
-def save_product(data: ProductCreate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def save_product(data: ProductCreate, db: Session = Depends(get_db), _: User = Depends(require_permission(Permission.MANAGE_STOCK))):
     product = Product(batch_id=generate_batch_id(db), **data.model_dump())
     db.add(product)
     db.commit()
@@ -126,7 +127,7 @@ def save_product(data: ProductCreate, db: Session = Depends(get_db), _: User = D
 
 @router.put("/{batch_id}", response_model=ProductOut)
 def update_product(batch_id: str, data: ProductUpdate, db: Session = Depends(get_db),
-                   _: User = Depends(require_admin)):
+                   _: User = Depends(require_permission(Permission.MANAGE_STOCK))):
     product = get_or_404(db, batch_id)
     for field, value in data.model_dump().items():
         setattr(product, field, value)
@@ -136,7 +137,7 @@ def update_product(batch_id: str, data: ProductUpdate, db: Session = Depends(get
 
 
 @router.delete("/{batch_id}", status_code=204)
-def delete_product(batch_id: str, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def delete_product(batch_id: str, db: Session = Depends(get_db), _: User = Depends(require_permission(Permission.MANAGE_STOCK))):
     """Delete a batch, unless a recorded sale took stock from it (P0-3).
 
     A sold batch is blocked even at quantity 0: its sales still point at it,

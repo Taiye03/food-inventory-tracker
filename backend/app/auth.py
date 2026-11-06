@@ -1,11 +1,13 @@
 """
-Login, password hashing and role checks.
+Login and password hashing.
 
 - Passwords are hashed with bcrypt (the old app stored them as plain text).
 - A successful login returns a JWT "token". The React app sends it back on
   every request in an `Authorization: Bearer <token>` header.
-- `require_admin` is what actually enforces roles: a "User" account gets a
-  403 error if it tries to change anything.
+- `get_current_user` turns that token into the logged-in User (401 if it's
+  missing, invalid or expired). What that user may then do is decided in
+  app/permissions.py: every endpoint uses require_permission(...), never
+  this module, to check access.
 """
 from datetime import datetime, timedelta, timezone
 
@@ -68,10 +70,4 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     user = db.query(User).filter(User.username == payload.get("sub")).first()
     if user is None:
         raise unauthorized
-    return user
-
-
-def require_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role != "Admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only")
     return user
