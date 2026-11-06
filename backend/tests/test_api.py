@@ -1,6 +1,7 @@
 """
 Run from backend/ with:  pytest -q
-Uses a throwaway SQLite file so your real data is never touched.
+Uses a throwaway SQLite file so your real data is never touched
+(tests/conftest.py fixes DATABASE_URL before the app is imported).
 """
 import os
 from datetime import date, timedelta
@@ -10,16 +11,16 @@ os.environ["DATABASE_URL"] = "sqlite:///./test_foodheroes.db"
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.database import Base, engine  # noqa: E402
 from app.main import app  # noqa: E402
+from tests.db_helpers import clear_test_database, reset_test_database  # noqa: E402
 
 
 @pytest.fixture()
 def client():
-    Base.metadata.drop_all(bind=engine)
-    with TestClient(app) as c:  # runs startup: creates tables + seeds admin
+    reset_test_database()          # empty database at the latest migration
+    with TestClient(app) as c:     # runs startup: checks the revision, seeds admin
         yield c
-    Base.metadata.drop_all(bind=engine)
+    clear_test_database()
 
 
 def login(client, username="admin", password="changeme123"):
@@ -197,11 +198,11 @@ def test_order_cartons_can_be_blank_or_fractional(client):
 
 
 def test_import_ledger(tmp_path):
-    from app.database import Base, SessionLocal, engine
+    from app.database import SessionLocal
     from app.models import Order
     from scripts.import_ledger import main as import_main
 
-    Base.metadata.drop_all(bind=engine)
+    reset_test_database()
     ledger = tmp_path / "ledger.csv"
     ledger.write_text(
         "Date,Customer,Cartons (ctn),Amount (₦),Status,Notes\n"
@@ -215,7 +216,7 @@ def test_import_ledger(tmp_path):
     db = SessionLocal()
     rows = {o.customer_name: o for o in db.query(Order).all()}
     db.close()
-    Base.metadata.drop_all(bind=engine)
+    clear_test_database()
     assert len(rows) == 3
     assert rows["4u"].amount_paid == 2280000
     assert rows["Pharmcare"].amount_paid == 0 and "Pharm" in rows["Pharmcare"].notes

@@ -5,6 +5,9 @@ Run from the backend/ folder (with the venv active):
 
     python -m scripts.import_ledger data/sales_ledger.csv
 
+The database must already be at the latest migration (`alembic upgrade head`);
+the script checks first and changes nothing if it isn't.
+
 Safe to run more than once: a row that's already in the database
 (same date, customer and amount) is skipped, not added twice.
 
@@ -20,8 +23,8 @@ import csv
 import sys
 from datetime import date
 
-from app.database import Base, SessionLocal, engine
-from app.main import upgrade_orders_table
+from app.database import SessionLocal, engine
+from app.db_check import DatabaseNotReady, check_database_revision
 from app.models import Order
 
 PRODUCT = "Eggs (carton)"
@@ -60,8 +63,7 @@ def read_rows(path: str):
 
 
 def main(path: str) -> None:
-    upgrade_orders_table()
-    Base.metadata.create_all(bind=engine)
+    check_database_revision(engine)  # raises DatabaseNotReady, before anything is read or written
     db = SessionLocal()
     added = skipped = 0
     try:
@@ -87,4 +89,7 @@ def main(path: str) -> None:
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         sys.exit("Usage: python -m scripts.import_ledger path/to/sales_ledger.csv")
-    main(sys.argv[1])
+    try:
+        main(sys.argv[1])
+    except DatabaseNotReady as e:
+        sys.exit(f"Database not ready, nothing imported.\n{e}")

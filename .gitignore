@@ -1,6 +1,16 @@
 # Real client data and credentials — never push these
 *.csv
 *.db
+backups/
+*.db.json
+*.db.partial
+*.db.restoring
+*.db.before-restore-*
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
 
 # Python
 __pycache__/

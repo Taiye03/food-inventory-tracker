@@ -4,16 +4,21 @@ FoodHeroes API. Run from the backend/ folder with:
     uvicorn app.main:app --reload
 
 Then open http://localhost:8000/docs to try every endpoint in the browser.
+
+The app never creates or changes database tables itself. Before the first run,
+and after pulling code with a new migration, run `alembic upgrade head` (see
+README.md and docs/DATABASE_RECOVERY.md). Startup refuses to serve requests
+until the database is at the latest migration.
 """
 import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from sqlalchemy import inspect, text
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth import hash_password
-from app.database import DATABASE_URL, Base, SessionLocal, engine
+from app.database import SessionLocal, engine
+from app.db_check import check_database_revision
 from app.models import User
 from app.routers import auth_router, orders_router, products_router, reports_router, users_router
 
@@ -38,37 +43,13 @@ def seed_admin():
         db.close()
 
 
-def upgrade_orders_table():
-    """
-    Small one-off migration. The first version of the orders table required
-    a whole number of cartons. The real ledger has blanks and halves
-    (e.g. 37.5), so cartons became an optional decimal. SQLite can't change
-    a column in place, so rebuild the table and copy any existing orders.
-    """
-    if not DATABASE_URL.startswith("sqlite"):
-        return
-    insp = inspect(engine)
-    if "orders" not in insp.get_table_names():
-        return
-    cartons = next(c for c in insp.get_columns("orders") if c["name"] == "cartons")
-    if cartons["nullable"]:
-        return  # already upgraded
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE orders RENAME TO orders_old"))
-        conn.execute(text("DROP INDEX IF EXISTS ix_orders_id"))
-        conn.execute(text("DROP INDEX IF EXISTS ix_orders_order_date"))
-        conn.execute(text("DROP INDEX IF EXISTS ix_orders_customer_name"))
-    Base.metadata.create_all(bind=engine)
-    with engine.begin() as conn:
-        conn.execute(text("INSERT INTO orders SELECT * FROM orders_old"))
-        conn.execute(text("DROP TABLE orders_old"))
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    upgrade_orders_table()
-    Base.metadata.create_all(bind=engine)  # create tables if they don't exist
-    seed_admin()
+    # Refuse to start unless the database is at the latest migration. This
+    # only reads; it never creates tables or runs migrations (P0-5 step 4).
+    # A DatabaseNotReady error explains how to create or migrate the database.
+    check_database_revision(engine)
+    seed_admin()  # data, not schema: only once the schema is known to be right
     yield
 
 

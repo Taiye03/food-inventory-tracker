@@ -15,17 +15,30 @@ cd backend
 python3 -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+```
+
+The app never creates or changes database tables itself; migrations do. It refuses to start until the database is at the latest migration, and the error message says what to run.
+
+**New installation** (no database yet):
+
+```bash
+export DATABASE_URL=sqlite:///$PWD/foodheroes.db
+alembic upgrade head              # creates the tables
 uvicorn app.main:app --reload
 ```
 
-Open http://localhost:8000/docs to try every endpoint in the browser.
-
-On first run it creates `foodheroes.db` and one account:
+On the first start it creates one account:
 
 - username: `admin`
 - password: `changeme123` (change it)
 
-Run the tests with `pytest -q` from `backend/`.
+**Existing database** (created by an older version, before migrations): don't run `alembic upgrade head` on it straight away. Follow "Bringing an existing database under migrations" in [docs/DATABASE_RECOVERY.md](docs/DATABASE_RECOVERY.md): preflight, backup, `alembic stamp 0001`, then `alembic upgrade head`.
+
+**After pulling new code**, if startup says the database is outdated: stop the app, back up, run `alembic upgrade head`.
+
+Open http://localhost:8000/docs to try every endpoint in the browser.
+
+Run the tests with `pytest -q` from `backend/`. They use a throwaway `test_foodheroes.db` and never touch the database in `DATABASE_URL`.
 
 ## Run the frontend
 
