@@ -32,37 +32,19 @@ import sys
 from pathlib import Path
 
 from pydantic import EmailStr, TypeAdapter, ValidationError
-from sqlalchemy import create_engine, func, insert, select
+from sqlalchemy import func, insert, select
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.pool import NullPool
 
 from app.auth import hash_password, verify_password
-from app.database import enforce_foreign_keys
-from app.db_check import DatabaseNotReady, check_database_revision
 from app.models import User
 from app.passwords import PasswordRejected, check_new_password
-from scripts.db_common import is_sqlite_file
+from scripts.live_database import NotLiveDatabase, live_database_path, open_live_engine, require_latest_migration
 
 _EMAIL = TypeAdapter(EmailStr)
 
 
 class CreateRefused(Exception):
     """Something isn't safe or isn't right; nothing has been changed."""
-
-
-def live_database(raw: str) -> Path:
-    path = Path(raw).expanduser().resolve()
-    if not path.is_file():
-        raise CreateRefused(f"No database file at {path}. Create it first with `alembic upgrade head`.")
-    if not is_sqlite_file(path):
-        raise CreateRefused(f"{path} is not an SQLite database.")
-    if Path(str(path) + ".json").exists():
-        raise CreateRefused(f"{path} has a backup manifest beside it: it looks like a backup. "
-                            "Create accounts only in the live database.")
-    for suffix in ("-journal", "-wal"):
-        if Path(str(path) + suffix).exists():
-            raise CreateRefused(f"{path.name}{suffix} exists: the app may be running. Stop it first.")
-    return path
 
 
 def check_details(username: str, fullname: str, email: str) -> None:
@@ -86,19 +68,18 @@ def check_details(username: str, fullname: str, email: str) -> None:
 
 def create_admin(database: str, username: str, fullname: str, email: str, prompt=getpass.getpass) -> Path:
     check_details(username, fullname, email)
-    path = live_database(database)
-    # hide_parameters: if anything goes wrong, SQLAlchemy's error message
-    # won't include the values (the password hash) that were being written.
-    engine = create_engine(f"sqlite:///{path}", poolclass=NullPool, hide_parameters=True)
-    enforce_foreign_keys(engine)
+    try:
+        path = live_database_path(database, action="Create accounts")
+    except NotLiveDatabase as e:
+        raise CreateRefused(str(e)) from None
+    engine = open_live_engine(path)   # hide_parameters: errors never show the hash
     admins = select(func.count()).select_from(User).where(User.role == "Admin")
     same_name = select(func.count()).select_from(User).where(User.username == username)
     try:
         try:
-            check_database_revision(engine)
-        except DatabaseNotReady as e:
-            raise CreateRefused("This database isn't at the latest migration, so it's not a live, "
-                                f"migrated database.\n{e}") from None
+            require_latest_migration(engine)
+        except NotLiveDatabase as e:
+            raise CreateRefused(str(e)) from None
         with engine.connect() as conn:
             if conn.execute(admins).scalar():
                 raise CreateRefused("This database already has an administrator, so nothing was created. "

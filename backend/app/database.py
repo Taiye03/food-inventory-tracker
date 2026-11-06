@@ -44,7 +44,10 @@ def enforce_foreign_keys(engine) -> bool:
     return True
 
 
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+# hide_parameters: database error messages (and so tracebacks in the server
+# log) show "[SQL parameters hidden]" instead of the values being written,
+# such as a new user's password hash.
+engine = create_engine(DATABASE_URL, connect_args=connect_args, hide_parameters=True)
 enforce_foreign_keys(engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

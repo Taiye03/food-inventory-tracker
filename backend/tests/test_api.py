@@ -14,11 +14,13 @@ from fastapi.testclient import TestClient  # noqa: E402
 from app.main import app  # noqa: E402
 from tests.db_helpers import TEST_ADMIN_PASSWORD, clear_test_database, reset_test_database  # noqa: E402
 
+STAFF_PASSWORD = "staff password 1"   # meets the app/passwords.py rules
+
 
 @pytest.fixture()
 def client():
     reset_test_database()          # empty database at the latest migration
-    with TestClient(app) as c:     # runs startup: checks the revision, seeds admin
+    with TestClient(app) as c:     # runs startup: checks the revision and that an admin exists
         yield c
     clear_test_database()
 
@@ -102,8 +104,8 @@ def test_expiry_alerts(client):
 def test_non_admin_can_view_but_not_change(client):
     admin = login(client)
     client.post("/users", json={"username": "staff", "fullname": "Staff Member", "role": "User",
-                                "email": "staff@example.com", "password": "secret1"}, headers=admin)
-    staff = login(client, "staff", "secret1")
+                                "email": "staff@example.com", "password": STAFF_PASSWORD}, headers=admin)
+    staff = login(client, "staff", STAFF_PASSWORD)
     assert client.get("/products", headers=staff).status_code == 200
     assert client.post("/products", json=product(), headers=staff).status_code == 403
     assert client.get("/users", headers=staff).status_code == 403
@@ -111,7 +113,7 @@ def test_non_admin_can_view_but_not_change(client):
 
 def test_bad_email_and_duplicate_username(client):
     h = login(client)
-    bad = {"username": "x", "fullname": "X", "role": "User", "email": "not-an-email", "password": "secret1"}
+    bad = {"username": "x", "fullname": "X", "role": "User", "email": "not-an-email", "password": STAFF_PASSWORD}
     assert client.post("/users", json=bad, headers=h).status_code == 422
     dup = {**bad, "username": "admin", "email": "a@b.com"}
     assert client.post("/users", json=dup, headers=h).status_code == 400
@@ -180,8 +182,8 @@ def test_staff_can_record_but_not_edit_orders(client):
     admin = login(client)
     stock(client, admin)
     client.post("/users", json={"username": "staff", "fullname": "Staff", "role": "User",
-                                "email": "s@example.com", "password": "secret1"}, headers=admin)
-    staff = login(client, "staff", "secret1")
+                                "email": "s@example.com", "password": STAFF_PASSWORD}, headers=admin)
+    staff = login(client, "staff", STAFF_PASSWORD)
     r = client.post("/orders", json=order(), headers=staff)
     assert r.status_code == 201
     assert client.put(f"/orders/{r.json()['id']}", json=order(), headers=staff).status_code == 403
@@ -250,8 +252,8 @@ def test_reports(client):
 def test_reports_admin_only(client):
     admin = login(client)
     client.post("/users", json={"username": "staff", "fullname": "Staff", "role": "User",
-                                "email": "s@example.com", "password": "secret1"}, headers=admin)
-    staff = login(client, "staff", "secret1")
+                                "email": "s@example.com", "password": STAFF_PASSWORD}, headers=admin)
+    staff = login(client, "staff", STAFF_PASSWORD)
     assert client.get("/reports/monthly", headers=staff).status_code == 403
 
 

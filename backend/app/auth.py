@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.config import signing_key, token_minutes
 from app.database import get_db
 from app.models import User
+from app.passwords import MAX_BYTES, PasswordRejected, too_long_for_bcrypt
 
 # The signing key and token lifetime come from app/config.py, which refuses a
 # missing, default or weak SECRET_KEY. There is deliberately no fallback key.
@@ -27,11 +28,26 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
 def hash_password(plain: str) -> str:
-    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
+    """Hash a NEW password. Callers check app/passwords.py rules first; this
+    refuses anything bcrypt can't use in full rather than silently cutting it."""
+    if too_long_for_bcrypt(plain):
+        raise PasswordRejected(f"The password is too long: bcrypt uses at most {MAX_BYTES} bytes.")
+    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return bcrypt.checkpw(plain.encode(), hashed.encode())
+    """Check a login attempt.
+
+    An attempt longer than bcrypt's 72 bytes is simply wrong: no account can
+    have such a password (they're refused when set, and bcrypt 5, which this
+    app has always installed, refuses to hash them). It's rejected here, before
+    bcrypt, so it gets a normal 401 instead of bcrypt 5's error (which used to
+    be a 500), and is never cut to 72 bytes: two passwords that differ only
+    after byte 72 are never treated as the same.
+    """
+    if too_long_for_bcrypt(plain):
+        return False
+    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode())
 
 
 def create_token(username: str, role: str) -> str:

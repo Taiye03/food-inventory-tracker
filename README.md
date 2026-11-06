@@ -30,7 +30,7 @@ python -m scripts.create_admin --database "$PWD/foodheroes.db" \
 uvicorn app.main:app --reload
 ```
 
-There is no built-in account and no default password. `create_admin` asks for the new administrator's password twice (hidden as you type): at least 12 characters and at most 72 bytes. The backend refuses to start until the database has an administrator. See "Creating the first administrator" in [docs/DATABASE_RECOVERY.md](docs/DATABASE_RECOVERY.md).
+There is no built-in account and no default password. `create_admin` asks for the new administrator's password twice (hidden as you type). The backend refuses to start until the database has an administrator. See "Creating the first administrator" and "Password rules" (12 characters to 72 bytes, the same everywhere) in [docs/DATABASE_RECOVERY.md](docs/DATABASE_RECOVERY.md).
 
 The backend won't start without its own `SECRET_KEY` (at least 32 random characters), which signs every login. There is no built-in default. Keep the same key between restarts, or everyone is logged out; see "Ending existing logins" in the same document.
 

@@ -111,7 +111,7 @@ export default function UsersPage({ token, onLogout }) {
 
         <label>
           Password
-          <input name="password" type="password" minLength={6} value={form.password} onChange={handleChange} required />
+          <input name="password" type="password" minLength={12} value={form.password} onChange={handleChange} required />
         </label>
 
         <button type="submit">Add User</button>

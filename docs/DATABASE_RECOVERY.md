@@ -68,7 +68,7 @@ python -m scripts.create_admin --database /full/path/foodheroes.db \
 
 1. Stop the app. The database must already be at the latest migration (`alembic upgrade head`).
 2. Run the command above with your own details. All four options are required; there is no default database.
-3. Type the password twice. Nothing appears as you type, and it's never shown, logged or saved anywhere except as a bcrypt hash. Rules: at least 12 characters; at most 72 bytes (bcrypt ignores anything longer, so it's refused rather than silently cut; accented or non-Latin letters take 2–4 bytes each); no space at the start or end; not the same as the username. Store it in a password manager.
+3. Type the password twice. Nothing appears as you type, and it's never shown, logged or saved anywhere except as a bcrypt hash. It must follow the [password rules](#password-rules). Store it in a password manager.
 4. Start the app and log in with the new account.
 
 What it changes: one new row in `users`, with role Admin. It never changes, replaces or deletes an existing account and touches no other table.
@@ -118,6 +118,19 @@ python -m scripts.db_preflight /tmp/restore-drill.db
 
 The restored copy must pass the preflight check, and its row counts must match the manifest. Delete the drill copy afterwards.
 
+## Password rules
+
+One set of rules, in `app/passwords.py`, applies wherever a password is set: `create_admin`, `reset_password`, and adding a user in the app (`POST /users`).
+
+- At least 12 characters.
+- At most 72 **bytes**. bcrypt only uses the first 72 bytes, so a longer password is refused rather than silently cut. Plain letters, digits and spaces are 1 byte each; accented letters such as é are 2; other scripts and emoji are 3–4.
+- No space (or tab) at the start or end.
+- Not the same as the username, ignoring capitals.
+
+Logging in is **not** checked against these rules, so accounts made before them keep working. A login attempt longer than 72 bytes is always wrong (no account can have such a password) and gets the normal "Invalid username or password". It's never cut to 72 bytes, so two passwords that differ only after byte 72 are never treated as the same.
+
+Error messages never contain a password or a password hash: validation errors from the API (HTTP 422) don't repeat the submitted values, and database errors show `[SQL parameters hidden]` instead of the values being written.
+
 ## Resetting a password
 
 For a forgotten password. The app has no change-password screen yet.
@@ -129,11 +142,11 @@ What changes: only that user's password hash. The account keeps its id, username
    `python -m scripts.backup_db backup --source /full/path/foodheroes.db --dest-dir /full/path/backups`
 3. `python -m scripts.reset_password --database /full/path/foodheroes.db --username admin`
    - Type the new password twice. Nothing appears as you type, and it's never shown, logged or saved anywhere except as a bcrypt hash.
-   - At least 12 characters; a few unrelated words is easier to remember than a short complex string. Store it in a password manager, not in a file or note in this repository.
+   - The same rules as everywhere else (see [Password rules](#password-rules)). A few unrelated words is easier to remember than a short complex string. Store it in a password manager, not in a file or note in this repository.
 4. `python -m scripts.db_preflight /full/path/foodheroes.db` must still report the latest revision and no issues.
 5. Start the app and log in with the new password.
 
-The script refuses (and changes nothing) for: a path that doesn't exist, a backup file, a database that isn't at the latest migration (which includes every pre-migration database and backup), an unknown username, passwords that don't match, are shorter than 12 characters, or equal the username, and a database with a journal file beside it (the app may be running).
+The script refuses (and changes nothing) for: a path that doesn't exist, a backup file, a database that isn't at the latest migration (which includes every pre-migration database and backup), an unknown username, a password that breaks the [password rules](#password-rules) or doesn't match its repeat, and a database with a journal or WAL file beside it (the app may be running).
 
 ### Ending existing logins (rotating `SECRET_KEY`)
 

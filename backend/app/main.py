@@ -14,11 +14,13 @@ until the database is at the latest migration and has an administrator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 
 from app.config import check_configuration
 from app.cors import StartupConfiguredCORSMiddleware
 from app.database import engine
 from app.db_check import check_database_revision, check_has_administrator
+from app.errors import validation_error_without_input
 from app.routers import auth_router, orders_router, products_router, reports_router, users_router
 
 
@@ -44,6 +46,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="FoodHeroes Stock Management API", lifespan=lifespan)
+# 422 responses never repeat submitted values back, so never a password (app/errors.py).
+app.add_exception_handler(RequestValidationError, validation_error_without_input)
 
 # Lets the React dev server (port 5173) call this API (port 8000). Allowed
 # origins are the ones validated at startup, not read here at import.

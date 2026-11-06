@@ -8,6 +8,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, model_validator
 
+from app.passwords import check_password_rules
+
 
 # ---------- Auth ----------
 class Token(BaseModel):
@@ -21,7 +23,14 @@ class UserCreate(BaseModel):
     fullname: str = Field(min_length=1, max_length=100)
     role: Literal["Admin", "User"]
     email: EmailStr
-    password: str = Field(min_length=6)
+    # Same rules as the command-line tools (app/passwords.py): 12 characters to
+    # 72 bytes, no space at either end, not the username.
+    password: str
+
+    @model_validator(mode="after")
+    def password_follows_the_rules(self):
+        check_password_rules(self.password, self.username)   # raises a ValueError (422)
+        return self
 
 
 class UserOut(BaseModel):
