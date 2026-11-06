@@ -7,10 +7,13 @@ real database or your real signing key, the tests never use them.
 """
 import os
 import secrets
+from pathlib import Path
 
-os.environ["DATABASE_URL"] = "sqlite:///./test_foodheroes.db"
+# A full path, as the app requires: the throwaway database in backend/.
+TEST_DATABASE = Path(__file__).resolve().parents[1] / "test_foodheroes.db"
+os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DATABASE}"
 # A fresh random signing key for every test run: tests sign real tokens with
 # a valid key, without any built-in default and without your private key.
 os.environ["SECRET_KEY"] = secrets.token_urlsafe(48)
-for name in ("TOKEN_MINUTES", "FRONTEND_ORIGINS"):
+for name in ("TOKEN_MINUTES", "FRONTEND_ORIGINS", "SECRET_KEY_FILE"):
     os.environ.pop(name, None)   # tests start from the documented defaults

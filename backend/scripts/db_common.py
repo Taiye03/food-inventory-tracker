@@ -6,10 +6,11 @@ Read-only means SQLite's `mode=ro` URI flag plus `PRAGMA query_only`, so a
 bug in these tools can't write to the business database.
 """
 import hashlib
-import os
 import sqlite3
 from pathlib import Path
 from urllib.parse import quote
+
+from sqlalchemy.engine import make_url
 
 SQLITE_HEADER = b"SQLite format 3\x00"
 
@@ -106,13 +107,17 @@ def file_sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def sqlite_path_from_url(url: str) -> Path:
-    """sqlite:///./foodheroes.db -> Path('./foodheroes.db'). Refuses other databases."""
-    prefix = "sqlite:///"
-    if not url.startswith(prefix):
-        raise DatabaseToolError("These tools only handle SQLite. For PostgreSQL use pg_dump.")
-    return Path(url[len(prefix):])
-
-
 def default_db_path() -> Path:
-    return sqlite_path_from_url(os.getenv("DATABASE_URL", "sqlite:///./foodheroes.db"))
+    """The database named by DATABASE_URL, for tools run without a path.
+
+    There is no fallback: if DATABASE_URL isn't set (or is relative, or not
+    SQLite) the tool refuses, rather than quietly using some ./foodheroes.db
+    in whatever folder it was started from."""
+    from app.config import ConfigurationError, database_url
+    try:
+        url = make_url(database_url())
+    except ConfigurationError as e:
+        raise DatabaseToolError(f"Give the database file's path, or set DATABASE_URL.\n{e}") from None
+    if url.get_backend_name() != "sqlite":
+        raise DatabaseToolError("These tools only handle SQLite. For PostgreSQL use pg_dump.")
+    return Path(url.database)

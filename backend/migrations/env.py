@@ -29,6 +29,8 @@ from sqlalchemy import create_engine, make_url
 from sqlalchemy.pool import NullPool
 
 import app.models  # noqa: F401  registers every table on Base.metadata
+from app.config import ConfigurationError
+from app.config import database_url as app_database_url
 from app.database import Base
 
 config = context.config
@@ -43,14 +45,21 @@ class MigrationError(RuntimeError):
 
 
 def database_url() -> str:
-    url = config.get_main_option("sqlalchemy.url") or os.getenv("DATABASE_URL")
-    if not url:
+    """sqlalchemy.url when the tests set it on the Config; otherwise DATABASE_URL,
+    validated exactly as the app validates it (required, full path, no default)."""
+    url = config.get_main_option("sqlalchemy.url")
+    if url:
+        return url
+    if not os.getenv("DATABASE_URL"):
         raise MigrationError(
             "Set DATABASE_URL to choose the database, e.g.\n"
             "    DATABASE_URL=sqlite:////tmp/fh-fresh.db alembic upgrade head\n"
             "Follow docs/DATABASE_RECOVERY.md before migrating a database with real data."
         )
-    return url
+    try:
+        return app_database_url()
+    except ConfigurationError as e:
+        raise MigrationError(str(e)) from None
 
 
 @contextmanager

@@ -6,7 +6,6 @@ foodheroes.db or the app's engine.
 """
 import os
 
-os.environ.setdefault("DATABASE_URL", "sqlite:///./test_foodheroes.db")  # same as test_api.py
 
 import json  # noqa: E402
 import sqlite3  # noqa: E402

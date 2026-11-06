@@ -1,7 +1,7 @@
 """
 Import the client's transcribed sales ledger into the Orders table.
 
-Run from the backend/ folder (with the venv active):
+Run from the backend/ folder (with the venv active and DATABASE_URL set):
 
     python -m scripts.import_ledger data/sales_ledger.csv
 
@@ -23,7 +23,7 @@ import csv
 import sys
 from datetime import date
 
-from app.database import SessionLocal, engine
+from app.database import get_engine, get_sessionmaker
 from app.db_check import DatabaseNotReady, check_database_revision
 from app.models import Order
 
@@ -63,8 +63,9 @@ def read_rows(path: str):
 
 
 def main(path: str) -> None:
-    check_database_revision(engine)  # raises DatabaseNotReady, before anything is read or written
-    db = SessionLocal()
+    # DATABASE_URL is required (no default database); raises ConfigurationError.
+    check_database_revision(get_engine())  # raises DatabaseNotReady, before anything is read or written
+    db = get_sessionmaker()()
     added = skipped = 0
     try:
         for line_no, order in read_rows(path):

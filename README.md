@@ -12,27 +12,28 @@ frontend/   React + Vite website (in progress)
 
 ```bash
 cd backend
-python3 -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
+python3 -m venv .venv
+source .venv/bin/activate         # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
 The app never creates or changes database tables itself; migrations do. It refuses to start until the database is at the latest migration, and the error message says what to run.
 
-**New installation** (no database yet):
+**Settings.** The backend needs `DATABASE_URL` (the database's full path) and a signing key, and refuses to start without them: there is no default database and no built-in key. Keep them in a private file **outside the repository**, made from the template `backend/.env.example`, and run every command through `scripts/with_env.py`. [docs/CONFIGURATION.md](docs/CONFIGURATION.md) walks through the one-time setup (about five minutes).
+
+**New installation** (no database yet), once `~/FoodHeroes-data/foodheroes.env` is set up:
 
 ```bash
-export DATABASE_URL=sqlite:///$PWD/foodheroes.db
-export SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"   # or your saved key
-alembic upgrade head              # creates the tables
-python -m scripts.create_admin --database "$PWD/foodheroes.db" \
+E=~/FoodHeroes-data/foodheroes.env
+python -m scripts.with_env $E -- alembic upgrade head              # creates the tables
+python -m scripts.with_env $E -- python -m scripts.create_admin --database ~/FoodHeroes-data/foodheroes.db \
     --username owner --fullname "Business Owner" --email owner@example.com
-uvicorn app.main:app --reload
+python -m scripts.with_env $E -- python -m uvicorn app.main:app --reload
 ```
 
 There is no built-in account and no default password. `create_admin` asks for the new administrator's password twice (hidden as you type). The backend refuses to start until the database has an administrator. See "Creating the first administrator" and "Password rules" (12 characters to 72 bytes, the same everywhere) in [docs/DATABASE_RECOVERY.md](docs/DATABASE_RECOVERY.md).
 
-The backend won't start without its own `SECRET_KEY` (at least 32 random characters), which signs every login. There is no built-in default. Keep the same key between restarts, or everyone is logged out; see "Ending existing logins" in the same document.
+The signing key (`SECRET_KEY_FILE` or `SECRET_KEY`, at least 32 random characters) signs every login. Keep the same key between restarts, or everyone is logged out. On a host, the same settings come from the host's secret store instead of a file: see "Running it on a host" in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 **Existing database** (created by an older version, before migrations): don't run `alembic upgrade head` on it straight away. Follow "Bringing an existing database under migrations" in [docs/DATABASE_RECOVERY.md](docs/DATABASE_RECOVERY.md): preflight, backup, `alembic stamp 0001`, then `alembic upgrade head`.
 
@@ -40,7 +41,7 @@ The backend won't start without its own `SECRET_KEY` (at least 32 random charact
 
 Open http://localhost:8000/docs to try every endpoint in the browser.
 
-Run the tests with `pytest -q` from `backend/`. They use a throwaway `test_foodheroes.db` and never touch the database in `DATABASE_URL`.
+Run the tests with `pytest -q` from `backend/` (no settings file needed). They use a throwaway `test_foodheroes.db` and a random key of their own, and never touch the database in `DATABASE_URL` or your key.
 
 ## Run the frontend
 

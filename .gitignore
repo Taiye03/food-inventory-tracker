@@ -22,8 +22,16 @@ venv/
 node_modules/
 dist/
 
-# Secrets
+# Secrets: real settings live OUTSIDE the repository (docs/CONFIGURATION.md).
+# These catch copies made here by mistake.
 .env
 .env.*
+*.env
+secret_key
+*secret_key*
+*.key
+*.pem
+# ...except the template, which holds only placeholders.
+!.env.example
 
 .DS_Store

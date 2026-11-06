@@ -3,7 +3,7 @@ Read-only health check of a FoodHeroes SQLite database, before migrations.
 
 Run from backend/:
 
-    python -m scripts.db_preflight                         # uses DATABASE_URL (default ./foodheroes.db)
+    python -m scripts.db_preflight                         # uses DATABASE_URL (required; no default)
     python -m scripts.db_preflight path/to/foodheroes.db
     python -m scripts.db_preflight path/to/foodheroes.db --json
 

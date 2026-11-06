@@ -3,16 +3,13 @@ Run from backend/ with:  pytest -q
 Uses a throwaway SQLite file so your real data is never touched
 (tests/conftest.py fixes DATABASE_URL before the app is imported).
 """
-import os
 from datetime import date, timedelta
 
-os.environ["DATABASE_URL"] = "sqlite:///./test_foodheroes.db"
+import pytest
+from fastapi.testclient import TestClient
 
-import pytest  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-
-from app.main import app  # noqa: E402
-from tests.db_helpers import TEST_ADMIN_PASSWORD, clear_test_database, reset_test_database  # noqa: E402
+from app.main import app
+from tests.db_helpers import TEST_ADMIN_PASSWORD, clear_test_database, reset_test_database
 
 STAFF_PASSWORD = "staff password 1"   # meets the app/passwords.py rules
 

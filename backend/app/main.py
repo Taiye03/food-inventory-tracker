@@ -18,7 +18,7 @@ from fastapi.exceptions import RequestValidationError
 
 from app.config import check_configuration
 from app.cors import StartupConfiguredCORSMiddleware
-from app.database import engine
+from app.database import get_engine
 from app.db_check import check_database_revision, check_has_administrator
 from app.errors import validation_error_without_input
 from app.routers import auth_router, orders_router, products_router, reports_router, users_router
@@ -28,7 +28,8 @@ from app.routers import auth_router, orders_router, products_router, reports_rou
 async def lifespan(app: FastAPI):
     # Refuse to start with a missing or unsafe SECRET_KEY, token lifetime or
     # CORS setting (P0-7). Raises ConfigurationError with what to fix.
-    settings = check_configuration()
+    settings = check_configuration()   # includes DATABASE_URL: no default database
+    engine = get_engine()
     # Refuse to start unless the database is at the latest migration. This
     # only reads; it never creates tables or runs migrations (P0-5 step 4).
     # A DatabaseNotReady error explains how to create or migrate the database.

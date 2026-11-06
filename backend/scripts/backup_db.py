@@ -3,7 +3,7 @@ Back up, verify and restore the FoodHeroes SQLite database.
 
 Run from backend/ with the app STOPPED:
 
-    python -m scripts.backup_db backup                       # uses DATABASE_URL (default ./foodheroes.db)
+    python -m scripts.backup_db backup                       # uses DATABASE_URL (required; no default)
     python -m scripts.backup_db backup --source path/to/foodheroes.db --dest-dir backups
     python -m scripts.backup_db verify backups/foodheroes-20261105-174500.db
     python -m scripts.backup_db restore backups/foodheroes-20261105-174500.db --target restored.db

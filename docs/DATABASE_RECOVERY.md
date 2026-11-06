@@ -27,7 +27,7 @@ Run from `backend/` with the virtual environment active. **Stop the app first.**
 | `python -m scripts.backup_db restore BACKUP --target PATH` | Restores a verified backup to a path that doesn't exist yet (a restore drill) | `PATH` |
 | `... restore BACKUP --target foodheroes.db --replace` | Restores over the live database. The current file is **renamed** to `foodheroes.db.before-restore-<time>`, never deleted | The database file |
 
-`DB` defaults to the file in `DATABASE_URL` (normally `./foodheroes.db`). Backups, manifests and restore leftovers are git-ignored. **Never commit them: they contain real business data.**
+`DB` defaults to the file in `DATABASE_URL`; if neither is given, the tool refuses rather than guessing (it never falls back to a `./foodheroes.db`). Running the tools through `python -m scripts.with_env ~/FoodHeroes-data/foodheroes.env -- …` ([CONFIGURATION.md](CONFIGURATION.md)) gives them the same database as the backend. Backups, manifests and restore leftovers are git-ignored. **Never commit them: they contain real business data.**
 
 All tools open the source database read-only (SQLite `mode=ro` plus `PRAGMA query_only`). No tool overwrites or deletes an existing file.
 
@@ -43,18 +43,20 @@ The app never creates or changes tables. At startup it checks the database and r
 | "at migration X, which this code doesn't know about" | The database was migrated by newer code | Update the code. Don't change the database |
 | "has no administrator account yet" | Migrated, but nobody can log in to manage it | [Creating the first administrator](#creating-the-first-administrator) |
 
-Migrations are never run automatically. `alembic` refuses to run unless `DATABASE_URL` is set, so it can't touch a database by accident. Always give the **full path** (`sqlite:////Users/you/…/foodheroes.db`, or `sqlite:///$PWD/foodheroes.db` from the folder it's in): a relative path depends on which folder you run the command from.
+Migrations are never run automatically. `alembic` refuses to run unless `DATABASE_URL` is set, so it can't touch a database by accident. Always give the **full path** (`sqlite:////Users/you/…/foodheroes.db`, or `sqlite:///$PWD/foodheroes.db` from the folder it's in): a relative path depends on which folder you run the command from, so the backend and `alembic` refuse one.
 
 ### Fresh installation
 
+First set up `~/FoodHeroes-data/foodheroes.env` ([CONFIGURATION.md](CONFIGURATION.md)), with `DATABASE_URL` pointing at where the new database should be. Then:
+
 ```bash
-cd backend && source venv/bin/activate
-export DATABASE_URL=sqlite:///$PWD/foodheroes.db
-alembic upgrade head
-python -m scripts.db_preflight          # expect: Revision 0002 (or later), RESULT: no issues
-python -m scripts.create_admin --database "$PWD/foodheroes.db" \
+cd backend && source .venv/bin/activate
+E=~/FoodHeroes-data/foodheroes.env
+python -m scripts.with_env $E -- alembic upgrade head
+python -m scripts.with_env $E -- python -m scripts.db_preflight   # expect: Revision 0002 (or later), RESULT: no issues
+python -m scripts.create_admin --database ~/FoodHeroes-data/foodheroes.db \
     --username owner --fullname "Business Owner" --email owner@example.com
-uvicorn app.main:app --reload
+python -m scripts.with_env $E -- python -m uvicorn app.main:app --reload
 ```
 
 ### Creating the first administrator
@@ -154,11 +156,10 @@ Changing a password does **not** log out sessions that are already logged in: a 
 
 ```bash
 ( umask 077; python3 -c "import secrets; print(secrets.token_urlsafe(48))" > ~/FoodHeroes-data/secret_key )
-export SECRET_KEY="$(cat ~/FoodHeroes-data/secret_key)"
-uvicorn app.main:app
+python -m scripts.with_env ~/FoodHeroes-data/foodheroes.env -- python -m uvicorn app.main:app
 ```
 
-Every token signed with the old key stops working at once, and everyone logs in again. Start the backend the same way every time. If `SECRET_KEY` isn't set, or is too short, a known default or a placeholder, the backend refuses to start. Keep `secret_key` out of the repository and out of backups you share, and never paste its contents anywhere.
+This assumes the settings file points at the key file (`SECRET_KEY_FILE`), as in [CONFIGURATION.md](CONFIGURATION.md). Every token signed with the old key stops working at once, and everyone logs in again. If the key is missing, too short, a known default or a placeholder, or its file can be read by other users, the backend refuses to start. Keep `secret_key` out of the repository and out of backups you share, and never paste its contents anywhere.
 
 ## Recovering from a bad migration or damaged database
 
