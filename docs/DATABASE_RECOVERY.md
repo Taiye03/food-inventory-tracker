@@ -123,7 +123,7 @@ export SECRET_KEY="$(cat ~/FoodHeroes-data/secret_key)"
 uvicorn app.main:app
 ```
 
-Every token signed with the old key stops working at once, and everyone logs in again. Start the backend the same way every time: if `SECRET_KEY` isn't set, the app falls back to the public default key and anyone who has read this repository could create valid tokens. Keep `secret_key` out of the repository and out of backups you share, and never paste its contents anywhere.
+Every token signed with the old key stops working at once, and everyone logs in again. Start the backend the same way every time. If `SECRET_KEY` isn't set, or is too short, a known default or a placeholder, the backend refuses to start. Keep `secret_key` out of the repository and out of backups you share, and never paste its contents anywhere.
 
 ## Recovering from a bad migration or damaged database
 

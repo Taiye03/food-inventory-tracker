@@ -7,7 +7,6 @@ Login, password hashing and role checks.
 - `require_admin` is what actually enforces roles: a "User" account gets a
   403 error if it tries to change anything.
 """
-import os
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -16,13 +15,13 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
+from app.config import signing_key, token_minutes
 from app.database import get_db
 from app.models import User
 
-# In production, set SECRET_KEY to a long random string. Never commit it.
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-secret-key-change-me-before-deploying")
+# The signing key and token lifetime come from app/config.py, which refuses a
+# missing, default or weak SECRET_KEY. There is deliberately no fallback key.
 ALGORITHM = "HS256"
-TOKEN_MINUTES = int(os.getenv("TOKEN_MINUTES", "480"))  # 8-hour work shift
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
@@ -36,8 +35,8 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def create_token(username: str, role: str) -> str:
-    expires = datetime.now(timezone.utc) + timedelta(minutes=TOKEN_MINUTES)
-    return jwt.encode({"sub": username, "role": role, "exp": expires}, SECRET_KEY, algorithm=ALGORITHM)
+    expires = datetime.now(timezone.utc) + timedelta(minutes=token_minutes())
+    return jwt.encode({"sub": username, "role": role, "exp": expires}, signing_key(), algorithm=ALGORITHM)
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
@@ -47,7 +46,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, signing_key(), algorithms=[ALGORITHM])
     except jwt.PyJWTError:
         raise unauthorized
     user = db.query(User).filter(User.username == payload.get("sub")).first()

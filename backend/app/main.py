@@ -14,9 +14,10 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth import hash_password
+from app.config import check_configuration
+from app.cors import StartupConfiguredCORSMiddleware
 from app.database import SessionLocal, engine
 from app.db_check import check_database_revision
 from app.models import User
@@ -45,25 +46,29 @@ def seed_admin():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Refuse to start with a missing or unsafe SECRET_KEY, token lifetime or
+    # CORS setting (P0-7). Raises ConfigurationError with what to fix.
+    settings = check_configuration()
     # Refuse to start unless the database is at the latest migration. This
     # only reads; it never creates tables or runs migrations (P0-5 step 4).
     # A DatabaseNotReady error explains how to create or migrate the database.
     check_database_revision(engine)
     seed_admin()  # data, not schema: only once the schema is known to be right
-    yield
+    # Only now, with every check passed, does CORS allow the validated origins
+    # (app/cors.py reads this on each request). Cleared on shutdown.
+    app.state.frontend_origins = settings.frontend_origins
+    try:
+        yield
+    finally:
+        app.state.frontend_origins = ()
 
 
 app = FastAPI(title="FoodHeroes Stock Management API", lifespan=lifespan)
 
-# Lets the React dev server (port 5173) call this API (port 8000).
-FRONTEND_ORIGINS = os.getenv("FRONTEND_ORIGINS", "http://localhost:5173").split(",")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=FRONTEND_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Lets the React dev server (port 5173) call this API (port 8000). Allowed
+# origins are the ones validated at startup, not read here at import.
+app.state.frontend_origins = ()
+app.add_middleware(StartupConfiguredCORSMiddleware, state=app.state)
 
 app.include_router(auth_router.router)
 app.include_router(users_router.router)

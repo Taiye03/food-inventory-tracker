@@ -23,6 +23,7 @@ The app never creates or changes database tables itself; migrations do. It refus
 
 ```bash
 export DATABASE_URL=sqlite:///$PWD/foodheroes.db
+export SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"   # or your saved key
 alembic upgrade head              # creates the tables
 uvicorn app.main:app --reload
 ```
@@ -32,7 +33,7 @@ On the first start it creates one account:
 - username: `admin`
 - password: `changeme123`. This default is public: **change it straight away** with `scripts/reset_password.py` (see "Resetting a password" in [docs/DATABASE_RECOVERY.md](docs/DATABASE_RECOVERY.md)).
 
-Login tokens are signed with `SECRET_KEY`. The built-in default is public too, so for real use start the backend with your own (same document).
+The backend won't start without its own `SECRET_KEY` (at least 32 random characters), which signs every login. There is no built-in default. Keep the same key between restarts, or everyone is logged out; see "Ending existing logins" in the same document.
 
 **Existing database** (created by an older version, before migrations): don't run `alembic upgrade head` on it straight away. Follow "Bringing an existing database under migrations" in [docs/DATABASE_RECOVERY.md](docs/DATABASE_RECOVERY.md): preflight, backup, `alembic stamp 0001`, then `alembic upgrade head`.
 
