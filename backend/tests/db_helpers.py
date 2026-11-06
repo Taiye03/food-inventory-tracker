@@ -35,9 +35,10 @@ def reset_test_database(revision="head"):
 def foreign_keys_enforced():
     """Turn on SQLite foreign-key enforcement for every connection the app opens.
 
-    SQLite enforcement is per connection and off by default, and the app
-    doesn't enable it yet (that's P0-5 step 6). Tests that must behave like
-    PostgreSQL, or like the app after step 6, run inside this.
+    Since P0-5 step 6 the app does this itself (app.database.enforce_foreign_keys),
+    so this is now belt and braces: it keeps tests/test_order_delete_fk.py
+    explicit about needing enforcement even if the app's setting were removed.
+    tests/test_foreign_keys.py checks the app's own setting without it.
     """
     def _on(dbapi_connection, _record):
         dbapi_connection.execute("PRAGMA foreign_keys = ON")

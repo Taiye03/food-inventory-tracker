@@ -10,7 +10,7 @@ To switch to MySQL later, set one environment variable and change no code:
 """
 import os
 
-from sqlalchemy import MetaData, create_engine
+from sqlalchemy import MetaData, create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./foodheroes.db")
@@ -18,7 +18,34 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./foodheroes.db")
 # SQLite needs this flag when FastAPI uses it from multiple threads.
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
+
+def enforce_foreign_keys(engine) -> bool:
+    """Make every new SQLite connection of `engine` enforce foreign keys (P0-5 step 6).
+
+    SQLite ignores FOREIGN KEY constraints unless each connection turns them on,
+    and the setting can't be stored in the database file. So it's switched on
+    the moment each connection is opened, before any transaction starts.
+
+    Only SQLite needs this: PostgreSQL and MySQL always enforce foreign keys,
+    so nothing is registered for them (returns False).
+
+    Alembic is unaffected: migrations/env.py creates its own engine without this
+    listener, and turns enforcement off while migrating (then restores it).
+    """
+    if engine.dialect.name != "sqlite":
+        return False
+
+    @event.listens_for(engine, "connect")
+    def _sqlite_foreign_keys_on(dbapi_connection, _connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys = ON")
+        cursor.close()
+
+    return True
+
+
 engine = create_engine(DATABASE_URL, connect_args=connect_args)
+enforce_foreign_keys(engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Predictable names for indexes and constraints (P0-5, decision M4). Migrations
